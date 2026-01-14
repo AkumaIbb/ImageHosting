@@ -249,7 +249,7 @@ if (isset($_GET['id'])) {
     </section>
 
     <footer>
-      <p>Uploads bleiben 48 Stunden verfügbar. Teile danach einfach den neuen Link.</p>
+      <p>Hobbyprojekt, nicht in Verbindung mit https://f-list.net</p>
     </footer>
   </main>
 
