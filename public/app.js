@@ -1,5 +1,7 @@
 const api = {
   upload: '/api/upload.php',
+  register: '/api/register.php',
+  me: '/api/me.php',
 };
 
 const dropzone = document.querySelector('#dropzone');
@@ -7,6 +9,10 @@ const fileInput = document.querySelector('#fileInput');
 const fileName = document.querySelector('#fileName');
 const uploadButton = document.querySelector('#uploadButton');
 const uploadStatus = document.querySelector('#uploadStatus');
+const registerButton = document.querySelector('#registerButton');
+const accountStatus = document.querySelector('#accountStatus');
+const accountLink = document.querySelector('#accountLink');
+const adminLink = document.querySelector('#adminLink');
 
 const state = {
   files: [],
@@ -30,6 +36,17 @@ const renderStatus = (title, detail) => {
   uploadStatus.innerHTML = `
     <strong>${title}</strong>
     <small>${detail}</small>
+  `;
+};
+
+const renderAccountStatus = (title, detail, extra = '') => {
+  if (!accountStatus) {
+    return;
+  }
+  accountStatus.innerHTML = `
+    <strong>${title}</strong>
+    <small>${detail}</small>
+    ${extra}
   `;
 };
 
@@ -157,3 +174,79 @@ uploadButton.addEventListener('click', async () => {
     dropzone.classList.remove('is-loading');
   }
 });
+
+const initAccount = async () => {
+  if (!accountStatus) {
+    return;
+  }
+  try {
+    const data = await requestJson(api.me);
+    if (data?.user_id) {
+      renderAccountStatus(
+        'Account aktiv.',
+        'Dein Zugangsschlüssel ist im Cookie hinterlegt. Bitte sicher aufbewahren.'
+      );
+      if (accountLink) {
+        accountLink.style.display = 'inline-flex';
+      }
+      if (data.is_admin && adminLink) {
+        adminLink.style.display = 'inline-flex';
+      }
+      if (registerButton) {
+        registerButton.style.display = 'none';
+      }
+      return;
+    }
+  } catch (error) {
+    console.warn('Account check failed', error);
+  }
+};
+
+if (registerButton) {
+  registerButton.addEventListener('click', async () => {
+    renderAccountStatus('Account wird erstellt ...', 'Bitte kurz warten.');
+    try {
+      const data = await requestJson(api.register, { method: 'POST' });
+      if (!data?.user_id) {
+        throw new Error('Antwort ohne User-ID');
+      }
+      const userId = data.user_id;
+      const copyId = async () => {
+        try {
+          await navigator.clipboard.writeText(userId);
+        } catch (error) {
+          console.warn('Clipboard copy failed', error);
+        }
+      };
+      const extra = `
+        <div style="margin-top: 10px; display: grid; gap: 6px;">
+          <code style="font-size: 1rem; word-break: break-all;">${userId}</code>
+          <button class="button" id="copyUserId" type="button">Zugangsschlüssel kopieren</button>
+          <small>Dieser Schlüssel ist nicht wiederherstellbar. Bitte sicher speichern.</small>
+        </div>
+      `;
+      renderAccountStatus('Account erstellt.', 'Zugangsschlüssel einmalig angezeigt:', extra);
+      if (accountLink) {
+        accountLink.style.display = 'inline-flex';
+      }
+      if (data.is_admin && adminLink) {
+        adminLink.style.display = 'inline-flex';
+      }
+      registerButton.style.display = 'none';
+      const copyButton = document.querySelector('#copyUserId');
+      if (copyButton) {
+        copyButton.addEventListener('click', copyId);
+        copyButton.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            copyId();
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Account registration failed', error);
+      renderAccountStatus('Account konnte nicht erstellt werden.', 'Bitte erneut versuchen.');
+    }
+  });
+}
+
+initAccount();

@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../lib/cleanup.php';
 require_once __DIR__ . '/../lib/uploads.php';
+require_once __DIR__ . '/../lib/users.php';
+require_once __DIR__ . '/../lib/admin.php';
 
 ih_maybe_cleanup();
 
@@ -11,6 +13,20 @@ $upload = $uploadId ? ih_load_upload($uploadId) : null;
 $shortCode = is_array($upload) ? ($upload['short_code'] ?? null) : null;
 $publicUrl = $shortCode ? '/v.php?id=' . $shortCode : null;
 $isMissing = !$upload;
+$cookieUserId = ih_get_user_id_cookie();
+$isAdmin = is_admin($cookieUserId);
+$ownerId = is_array($upload) ? ($upload['user_id'] ?? null) : null;
+$isAuthorized = !$ownerId || $isAdmin || ($cookieUserId && $ownerId === $cookieUserId);
+$expiresAt = is_array($upload) ? ($upload['expires_at'] ?? null) : null;
+if ($expiresAt !== null) {
+  $expiresAt = (int)$expiresAt;
+}
+$expiresLabel = 'Uploads bleiben 48 Stunden verfügbar.';
+if ($expiresAt === null && !$isMissing) {
+  $expiresLabel = 'Uploads bleiben unbegrenzt verfügbar.';
+} elseif (is_int($expiresAt) && !$isMissing) {
+  $expiresLabel = 'Ablauf: ' . date('Y-m-d H:i', $expiresAt);
+}
 ?>
 <!DOCTYPE html>
 <html lang="de">
@@ -174,14 +190,20 @@ $isMissing = !$upload;
         <?php else: ?>
           <span class="button secondary" aria-disabled="true">Öffentliche Ansicht nicht verfügbar</span>
         <?php endif; ?>
-        <button class="button" id="addButton" type="button">Weitere Bilder hinzufügen</button>
+        <?php if ($isAuthorized): ?>
+          <button class="button" id="addButton" type="button">Weitere Bilder hinzufügen</button>
+        <?php endif; ?>
       </div>
-      <div class="dropzone" id="dropzone">
-        <p>Ziehe Bilder hier hinein oder füge sie per Strg+V hinzu.</p>
-        <label class="button secondary" for="fileInput">Bilder auswählen</label>
-        <input id="fileInput" type="file" accept="image/*" multiple>
-        <input id="fileName" type="text" class="input" readonly placeholder="Keine Dateien ausgewählt">
-      </div>
+      <?php if ($isAuthorized): ?>
+        <div class="dropzone" id="dropzone">
+          <p>Ziehe Bilder hier hinein oder füge sie per Strg+V hinzu.</p>
+          <label class="button secondary" for="fileInput">Bilder auswählen</label>
+          <input id="fileInput" type="file" accept="image/*" multiple>
+          <input id="fileName" type="text" class="input" readonly placeholder="Keine Dateien ausgewählt">
+        </div>
+      <?php else: ?>
+        <div class="status">Dieser Upload gehört zu einem Account. Aktionen sind nur mit passendem Zugangsschlüssel möglich.</div>
+      <?php endif; ?>
       <div class="status" id="status">Bereit.</div>
     </section>
 
@@ -192,17 +214,19 @@ $isMissing = !$upload;
           <div class="thumb">
             <img src="<?php echo ih_public_file_url($uploadId, $file['filename']); ?>" alt="Upload Bild">
             <small><?php echo htmlspecialchars($file['original'], ENT_QUOTES); ?></small>
-            <button class="button secondary delete-button" data-file-id="<?php echo $file['id']; ?>" type="button">Bild löschen</button>
+            <?php if ($isAuthorized): ?>
+              <button class="button secondary delete-button" data-file-id="<?php echo $file['id']; ?>" type="button">Bild löschen</button>
+            <?php endif; ?>
           </div>
         <?php endforeach; ?>
       </div>
     </section>
   <?php endif; ?>
 
-  <footer>Uploads bleiben 48 Stunden verfügbar.</footer>
+  <footer><?php echo htmlspecialchars($expiresLabel, ENT_QUOTES); ?></footer>
 </main>
 
-<?php if (!$isMissing): ?>
+<?php if (!$isMissing && $isAuthorized): ?>
 <script>
   const uploadId = <?php echo json_encode($uploadId); ?>;
   const dropzone = document.getElementById('dropzone');
