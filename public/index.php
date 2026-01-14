@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../lib/cleanup.php';
+ih_maybe_cleanup();
 ?><!DOCTYPE html>
 <html lang="de">
 <head>
@@ -49,12 +51,6 @@
       font-size: 1.1rem;
     }
 
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 20px;
-    }
-
     .card {
       background: rgba(13, 16, 24, 0.72);
       border: 1px solid rgba(255, 255, 255, 0.08);
@@ -83,6 +79,11 @@
     .dropzone.is-active {
       border-color: #7cd4ff;
       background: rgba(124, 212, 255, 0.08);
+    }
+
+    .dropzone.is-loading {
+      border-color: #3fb47a;
+      background: rgba(63, 180, 122, 0.12);
     }
 
     .dropzone__icon {
@@ -154,28 +155,40 @@
       width: 100%;
     }
 
-    .response {
-      margin-top: 14px;
+    .status {
+      width: 100%;
       background: rgba(8, 10, 16, 0.9);
       border-radius: 12px;
       padding: 14px;
-      font-family: "JetBrains Mono", "Fira Code", monospace;
-      font-size: 0.9rem;
-      color: #c7f0ff;
-      min-height: 120px;
-      overflow-x: auto;
-    }
-
-    .endpoint-list {
-      list-style: none;
-      display: grid;
-      gap: 10px;
       font-size: 0.95rem;
+      color: #c7f0ff;
+      min-height: 64px;
+      display: grid;
+      gap: 6px;
     }
 
-    .endpoint-list code {
-      color: #8ad1ff;
-      font-weight: 600;
+    .status small {
+      color: #97a1b7;
+    }
+
+    .spinner {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 3px solid rgba(255, 255, 255, 0.2);
+      border-top-color: #7cd4ff;
+      animation: spin 0.9s linear infinite;
+      display: none;
+    }
+
+    .dropzone.is-loading .spinner {
+      display: block;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
     }
 
     footer {
@@ -189,69 +202,32 @@
   <main class="shell">
     <header>
       <h1>ImageHosting – Easy Image Uploads</h1>
-      <p>Kopieren, ziehen oder per Klick hochladen – und live mit der API kommunizieren.</p>
+      <p>Ziehe Bilder hier hinein, wähle sie per Klick oder füge sie direkt aus der Zwischenablage ein.</p>
     </header>
 
     <section class="card">
       <div class="dropzone" id="dropzone">
         <div class="dropzone__icon" aria-hidden="true"></div>
         <div>
-          <h2>Copy &amp; Paste oder Drag &amp; Drop</h2>
-          <p class="dropzone__hint">Ziehe ein Bild hier hinein oder wähle eine Datei aus.</p>
+          <h2>Copy &amp; Paste, Drag &amp; Drop</h2>
+          <p class="dropzone__hint">Mehrere Bilder möglich – wir erstellen automatisch ein Album.</p>
         </div>
+        <div class="spinner" aria-hidden="true"></div>
         <div class="controls">
-          <label class="button" for="fileInput">Bild auswählen</label>
-          <input id="fileInput" type="file" accept="image/*">
-          <input id="fileName" class="input" type="text" placeholder="/pfad/zu/deinem/bild.png" readonly>
+          <label class="button" for="fileInput">Bilder auswählen</label>
+          <input id="fileInput" type="file" accept="image/*" multiple>
+          <input id="fileName" class="input" type="text" placeholder="Keine Dateien ausgewählt" readonly>
           <button id="uploadButton">Upload starten</button>
         </div>
       </div>
-      <pre class="response" id="uploadResponse">Upload-Status erscheint hier ...</pre>
-    </section>
-
-    <section class="grid">
-      <div class="card">
-        <h2>Alben erstellen</h2>
-        <p class="dropzone__hint">Lege ein neues Album über <code>POST /api/album_create.php</code> an.</p>
-        <div class="controls">
-          <input id="albumName" class="input" type="text" placeholder="Album-Name">
-          <button id="albumButton" class="secondary">Album anlegen</button>
-        </div>
-        <pre class="response" id="albumResponse">Album-Status erscheint hier ...</pre>
+      <div class="status" id="uploadStatus">
+        <strong>Bereit für den Upload.</strong>
+        <small>Tippe Strg+V, um ein Bild aus der Zwischenablage einzufügen.</small>
       </div>
-
-      <div class="card">
-        <h2>Bilder abrufen</h2>
-        <p class="dropzone__hint">Hole eine Bildliste über <code>GET /api/images.php</code>.</p>
-        <div class="controls">
-          <button id="listButton" class="secondary">Bildliste laden</button>
-        </div>
-        <pre class="response" id="listResponse">Antwort erscheint hier ...</pre>
-      </div>
-
-      <div class="card">
-        <h2>Bild löschen</h2>
-        <p class="dropzone__hint">Entferne ein Bild über <code>POST /api/delete.php</code>.</p>
-        <div class="controls">
-          <input id="deleteId" class="input" type="text" placeholder="Bild-ID oder Datei">
-          <button id="deleteButton" class="secondary">Bild löschen</button>
-        </div>
-        <pre class="response" id="deleteResponse">Lösch-Status erscheint hier ...</pre>
-      </div>
-    </section>
-
-    <section class="card">
-      <h2>Endpoints</h2>
-      <ul class="endpoint-list">
-        <li><code>POST /api/upload.php</code> – Bild-Upload</li>
-        <li><code>POST /api/album_create.php</code> – Album anlegen</li>
-        <li><code>GET /api/images.php</code> – Bilder abrufen</li>
-        <li><code>POST /api/delete.php</code> – Bild löschen</li>
-      </ul>
     </section>
 
     <footer>
-      <p>ImageHosting Demo-UI – bereit für den nächsten Ausbau.</p>
+      <p>Uploads bleiben 48 Stunden verfügbar. Teile danach einfach den neuen Link.</p>
     </footer>
   </main>
 

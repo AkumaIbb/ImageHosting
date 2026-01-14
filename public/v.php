@@ -1,0 +1,128 @@
+<?php
+declare(strict_types=1);
+
+require_once __DIR__ . '/../lib/cleanup.php';
+require_once __DIR__ . '/../lib/uploads.php';
+
+ih_maybe_cleanup();
+
+$uploadId = ih_sanitize_id($_GET['id'] ?? null);
+$upload = $uploadId ? ih_load_upload($uploadId) : null;
+$isMissing = !$upload;
+?>
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Galerie – ImageHosting</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: "Segoe UI", "Inter", system-ui, -apple-system, sans-serif;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      min-height: 100vh;
+      background: radial-gradient(circle at top, #3a3f4e 0%, #1c1f28 45%, #131620 100%);
+      color: #eef2f8;
+      padding: 40px 16px;
+      display: flex;
+      justify-content: center;
+    }
+    main {
+      width: min(1100px, 100%);
+      display: grid;
+      gap: 24px;
+    }
+    header h1 {
+      font-size: clamp(2rem, 4vw, 3rem);
+    }
+    header p {
+      color: #c4cad8;
+      margin-top: 8px;
+    }
+    .card {
+      background: rgba(13, 16, 24, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 18px;
+      padding: 22px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(14px);
+    }
+    .single img {
+      width: 100%;
+      border-radius: 12px;
+      max-height: 520px;
+      object-fit: contain;
+      background: rgba(0, 0, 0, 0.4);
+    }
+    .grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    }
+    .thumb {
+      background: rgba(8, 10, 16, 0.9);
+      border-radius: 12px;
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+      justify-items: center;
+    }
+    .thumb img {
+      width: 100%;
+      height: 160px;
+      object-fit: cover;
+      border-radius: 8px;
+    }
+    .thumb a {
+      color: #8ad1ff;
+      font-size: 0.9rem;
+      text-decoration: none;
+    }
+    footer {
+      text-align: center;
+      color: #97a1b7;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Galerie</h1>
+    <p>Öffentliche Ansicht dieses Uploads.</p>
+  </header>
+
+  <?php if ($isMissing): ?>
+    <section class="card">
+      <h2>Nicht verfügbar</h2>
+      <p>Dieser Upload ist abgelaufen oder wurde gelöscht.</p>
+    </section>
+  <?php elseif ($upload['type'] === 'single'): ?>
+    <section class="card single">
+      <?php $file = $upload['files'][0]; ?>
+      <img src="<?php echo ih_public_file_url($uploadId, $file['filename']); ?>" alt="Bild">
+    </section>
+  <?php else: ?>
+    <section class="card">
+      <div class="grid">
+        <?php foreach ($upload['files'] as $file): ?>
+          <div class="thumb">
+            <img src="<?php echo ih_public_file_url($uploadId, $file['filename']); ?>" alt="Bild">
+            <a href="<?php echo ih_public_file_url($uploadId, $file['filename']); ?>" target="_blank" rel="noopener">Direktlink öffnen</a>
+          </div>
+        <?php endforeach; ?>
+      </div>
+    </section>
+  <?php endif; ?>
+
+  <footer>Uploads bleiben 48 Stunden verfügbar.</footer>
+</main>
+</body>
+</html>
