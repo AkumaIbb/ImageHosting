@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../lib/api_bootstrap.php';
 require_once __DIR__ . '/../lib/uploads.php';
+require_once __DIR__ . '/../lib/base_url.php';
+require_once __DIR__ . '/../lib/shortcodes.php';
 
 log_msg('info', 'upload request start', [
     'method' => $_SERVER['REQUEST_METHOD'] ?? 'unknown',
@@ -141,6 +143,11 @@ if ($added === 0) {
 
 $upload['type'] = count($upload['files']) > 1 ? 'album' : 'single';
 ih_save_upload($upload);
+$publicUrl = '/v.php?id=' . $uploadId;
+$manageUrl = '/u.php?id=' . $uploadId;
+$expiresAt = ($upload['created_at'] ?? time()) + 172800;
+$shortCode = short_create($publicUrl, $expiresAt);
+$shortUrl = base_url() . '/?id=' . $shortCode;
 
 log_msg('info', 'upload success', [
     'upload_id' => $uploadId,
@@ -153,6 +160,8 @@ echo json_encode([
     'ok' => true,
     'upload_id' => $uploadId,
     'type' => $upload['type'],
-    'public_url' => '/v.php?id=' . $uploadId,
-    'manage_url' => '/u.php?id=' . $uploadId,
+    'public_url' => $publicUrl,
+    'manage_url' => $manageUrl,
+    'short_code' => $shortCode,
+    'short_url' => $shortUrl,
 ]);

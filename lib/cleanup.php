@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/uploads.php';
+require_once __DIR__ . '/shortcodes.php';
 
 function ih_maybe_cleanup(int $ttlSeconds = 172800): void
 {
@@ -28,5 +29,6 @@ function ih_maybe_cleanup(int $ttlSeconds = 172800): void
             ih_delete_upload($payload);
         }
     }
-}
 
+    short_purge_expired();
+}
