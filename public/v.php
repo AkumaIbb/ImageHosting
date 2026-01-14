@@ -139,7 +139,11 @@ $isAdmin = $cookieUserId ? is_admin($cookieUserId) : false;
     </section>
   <?php endif; ?>
 
-  <footer><p><?php echo htmlspecialchars(ih_t('footer.disclaimer', $lang), ENT_QUOTES, 'UTF-8'); ?></p></footer>
+  <footer>
+    <p><?php echo htmlspecialchars(ih_t('footer.disclaimer', $lang), ENT_QUOTES, 'UTF-8'); ?></p>
+    <p><?php echo htmlspecialchars(ih_t('footer.rules', $lang), ENT_QUOTES, 'UTF-8'); ?></p>
+    <p><?php echo htmlspecialchars(ih_t('footer.as_is', $lang), ENT_QUOTES, 'UTF-8'); ?></p>
+  </footer>
 </main>
 
 <script>
