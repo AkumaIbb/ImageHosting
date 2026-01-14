@@ -1,8 +1,17 @@
 <?php
 require_once __DIR__ . '/../lib/cleanup.php';
 require_once __DIR__ . '/../lib/shortcodes.php';
+require_once __DIR__ . '/../lib/users.php';
+require_once __DIR__ . '/../lib/admin.php';
+require_once __DIR__ . '/../lib/i18n.php';
+require_once __DIR__ . '/../lib/layout.php';
 
 ih_maybe_cleanup();
+$lang = ih_get_language();
+$translations = ih_i18n_payload($lang);
+$cookieUserId = ih_get_user_id_cookie();
+$isLoggedIn = $cookieUserId !== null;
+$isAdmin = $cookieUserId ? is_admin($cookieUserId) : false;
 
 if (isset($_GET['id'])) {
   $code = (string)$_GET['id'];
@@ -24,17 +33,13 @@ if (isset($_GET['id'])) {
   exit;
 }
 ?><!DOCTYPE html>
-<html lang="de">
+<html lang="<?php echo htmlspecialchars($lang, ENT_QUOTES, 'UTF-8'); ?>">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ImageHosting</title>
+  <link rel="stylesheet" href="/shared.css">
   <style>
-    :root {
-      color-scheme: dark;
-      font-family: "Segoe UI", "Inter", system-ui, -apple-system, sans-serif;
-    }
-
     * {
       box-sizing: border-box;
       margin: 0;
@@ -229,51 +234,57 @@ if (isset($_GET['id'])) {
 </head>
 <body>
   <main class="shell">
+    <?php ih_render_topbar($lang, $isLoggedIn, $isAdmin); ?>
     <header>
-      <h1>ImageHosting – Easy Image Uploads</h1>
-      <p>Ziehe Bilder hier hinein, wähle sie per Klick oder füge sie direkt aus der Zwischenablage ein.</p>
+      <h1><?php echo htmlspecialchars(ih_t('index.hero_title', $lang), ENT_QUOTES, 'UTF-8'); ?></h1>
+      <p><?php echo htmlspecialchars(ih_t('index.hero_subtitle', $lang), ENT_QUOTES, 'UTF-8'); ?></p>
     </header>
 
     <section class="card">
       <div class="dropzone" id="dropzone">
         <div class="dropzone__icon" aria-hidden="true"></div>
         <div>
-          <h2>Copy &amp; Paste, Drag &amp; Drop</h2>
-          <p class="dropzone__hint">Mehrere Bilder möglich – wir erstellen automatisch ein Album.</p>
+          <h2><?php echo htmlspecialchars(ih_t('index.drop_title', $lang), ENT_QUOTES, 'UTF-8'); ?></h2>
+          <p class="dropzone__hint"><?php echo htmlspecialchars(ih_t('index.drop_hint', $lang), ENT_QUOTES, 'UTF-8'); ?></p>
         </div>
         <div class="spinner" aria-hidden="true"></div>
         <div class="controls">
-          <label class="button" for="fileInput">Bilder auswählen</label>
+          <label class="button" for="fileInput"><?php echo htmlspecialchars(ih_t('index.select_images', $lang), ENT_QUOTES, 'UTF-8'); ?></label>
           <input id="fileInput" type="file" accept="image/*" multiple>
-          <input id="fileName" class="input" type="text" placeholder="Keine Dateien ausgewählt" readonly>
-          <button id="uploadButton">Upload starten</button>
+          <input id="fileName" class="input" type="text" placeholder="<?php echo htmlspecialchars(ih_t('app.files_none', $lang), ENT_QUOTES, 'UTF-8'); ?>" readonly>
+          <button id="uploadButton"><?php echo htmlspecialchars(ih_t('index.upload_start', $lang), ENT_QUOTES, 'UTF-8'); ?></button>
         </div>
       </div>
       <div class="status" id="uploadStatus">
-        <strong>Bereit für den Upload.</strong>
-        <small>Tippe Strg+V, um ein Bild aus der Zwischenablage einzufügen.</small>
+        <strong><?php echo htmlspecialchars(ih_t('index.status_ready_title', $lang), ENT_QUOTES, 'UTF-8'); ?></strong>
+        <small><?php echo htmlspecialchars(ih_t('index.status_ready_detail', $lang), ENT_QUOTES, 'UTF-8'); ?></small>
       </div>
     </section>
 
     <section class="card" id="accountCard">
-      <h2>Account (anonym)</h2>
-      <p>Optionaler Zugangsschlüssel, um Uploads dauerhaft zu verwalten. Der Schlüssel ist nicht wiederherstellbar.</p>
+      <h2><?php echo htmlspecialchars(ih_t('index.account_title', $lang), ENT_QUOTES, 'UTF-8'); ?></h2>
+      <p><?php echo htmlspecialchars(ih_t('index.account_desc', $lang), ENT_QUOTES, 'UTF-8'); ?></p>
       <div class="actions">
-        <button class="button secondary" id="registerButton" type="button">Account anlegen (anonym)</button>
-        <a class="button secondary" id="accountLink" href="/account.php" style="display: none;">Meine Uploads</a>
-        <a class="button secondary" id="adminLink" href="/admin.php" style="display: none;">Admin Panel</a>
+        <button class="button secondary" id="registerButton" type="button"><?php echo htmlspecialchars(ih_t('index.account_create', $lang), ENT_QUOTES, 'UTF-8'); ?></button>
+        <a class="button secondary" id="accountLink" href="/account.php" style="display: none;"><?php echo htmlspecialchars(ih_t('index.account_uploads', $lang), ENT_QUOTES, 'UTF-8'); ?></a>
+        <a class="button secondary" id="adminLink" href="/admin.php" style="display: none;"><?php echo htmlspecialchars(ih_t('index.account_admin', $lang), ENT_QUOTES, 'UTF-8'); ?></a>
       </div>
       <div class="status" id="accountStatus">
-        <strong>Noch kein Account hinterlegt.</strong>
-        <small>Du kannst einen anonymen Zugangsschlüssel erstellen und sicher speichern.</small>
+        <strong><?php echo htmlspecialchars(ih_t('index.account_status_title', $lang), ENT_QUOTES, 'UTF-8'); ?></strong>
+        <small><?php echo htmlspecialchars(ih_t('index.account_status_detail', $lang), ENT_QUOTES, 'UTF-8'); ?></small>
       </div>
     </section>
 
     <footer>
-      <p>Hobbyprojekt, nicht in Verbindung mit https://f-list.net</p>
+      <p><?php echo htmlspecialchars(ih_t('footer.disclaimer', $lang), ENT_QUOTES, 'UTF-8'); ?></p>
     </footer>
   </main>
 
+  <script>
+    window.IH_LANG = <?php echo json_encode($lang); ?>;
+    window.IH_I18N = <?php echo json_encode($translations, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+  </script>
+  <script src="/lang.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
