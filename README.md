@@ -112,6 +112,38 @@ location ~* ^/storage/.*\.(php|phtml|phar|php[0-9])$ {
 
 **Wichtig:** `public/storage/` darf niemals PHP ausführen.
 
+### Security Headers
+
+Setze zusätzlich `X-Content-Type-Options: nosniff`, um MIME-Sniffing bei Fehlkonfigurationen zu verhindern.
+
+**Apache (global oder vHost)**:
+
+```apache
+Header always set X-Content-Type-Options "nosniff"
+```
+
+Optional nur für `/storage`:
+
+```apache
+<Location "/storage/">
+    Header always set X-Content-Type-Options "nosniff"
+</Location>
+```
+
+**Nginx**:
+
+```nginx
+add_header X-Content-Type-Options "nosniff" always;
+```
+
+Optional nur für `/storage`:
+
+```nginx
+location /storage/ {
+  add_header X-Content-Type-Options "nosniff" always;
+}
+```
+
 ### PHP-Einstellungen (empfohlen)
 
 - `upload_max_filesize = 10M` (passt zu `IH_MAX_BYTES_PER_FILE`)
