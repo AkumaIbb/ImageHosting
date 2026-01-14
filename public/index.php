@@ -6,7 +6,7 @@ ih_maybe_cleanup();
 
 if (isset($_GET['id'])) {
   $code = (string)$_GET['id'];
-  if (!preg_match('/^[0-9A-Za-z]{1,8}$/', $code)) {
+  if (!short_is_valid_code($code)) {
       http_response_code(404);
       echo 'Link existiert nicht oder ist abgelaufen.';
       exit;
@@ -20,17 +20,7 @@ if (isset($_GET['id'])) {
       exit;
   }
 
-  $target = $row['target'] ?? '';
-  if (!short_is_safe_target($target)) {
-      http_response_code(404);
-      echo 'Link existiert nicht oder ist abgelaufen.';
-      exit;
-  }
-
-  if (!str_starts_with($target, '/')) {
-      $target = '/' . ltrim($target, '/');
-  }
-  header('Location: ' . $target, true, 302);
+  header('Location: /v.php?id=' . rawurlencode($code), true, 302);
   exit;
 }
 ?><!DOCTYPE html>
