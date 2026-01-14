@@ -9,8 +9,7 @@ ih_maybe_cleanup();
 
 $cookieUserId = ih_get_user_id_cookie();
 if (!is_admin($cookieUserId)) {
-    http_response_code(403);
-    echo 'Nicht autorisiert.';
+    header('Location: /admin_login.php', true, 302);
     exit;
 }
 ?>

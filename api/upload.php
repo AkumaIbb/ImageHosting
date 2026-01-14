@@ -8,6 +8,12 @@ require_once __DIR__ . '/../lib/shortcodes.php';
 require_once __DIR__ . '/../lib/users.php';
 require_once __DIR__ . '/../lib/admin.php';
 
+const IH_MAX_FILES_PER_REQUEST = 20;
+const IH_MAX_BYTES_PER_FILE = 10485760;
+const IH_MAX_BYTES_TOTAL = 52428800;
+const IH_RATE_LIMIT_MAX = 60;
+const IH_RATE_LIMIT_WINDOW = 600;
+
 log_msg('info', 'upload request start', [
     'method' => $_SERVER['REQUEST_METHOD'] ?? 'unknown',
     'content_type' => $_SERVER['CONTENT_TYPE'] ?? '',
@@ -47,6 +53,60 @@ if ($user && (int)($user['is_banned'] ?? 0) === 1 && !$isAdmin) {
 
 $uploadId = ih_sanitize_id($_POST['upload_id'] ?? null);
 $files = ih_collect_files($_FILES);
+$fileCount = 0;
+$totalSize = 0;
+foreach ($files as $entry) {
+    if (($entry['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        continue;
+    }
+    $fileCount++;
+    $totalSize += (int)($entry['size'] ?? 0);
+}
+
+if ($fileCount > IH_MAX_FILES_PER_REQUEST) {
+    http_response_code(413);
+    log_msg('warning', 'upload blocked too many files', [
+        'count' => $fileCount,
+        'limit' => IH_MAX_FILES_PER_REQUEST,
+    ]);
+    echo json_encode([
+        'ok' => false,
+        'error' => 'too_many_files',
+        'request_id' => api_request_id(),
+    ]);
+    exit;
+}
+
+$contentLength = isset($_SERVER['CONTENT_LENGTH']) ? (int)$_SERVER['CONTENT_LENGTH'] : 0;
+if ($contentLength > IH_MAX_BYTES_TOTAL || $totalSize > IH_MAX_BYTES_TOTAL) {
+    http_response_code(413);
+    log_msg('warning', 'upload blocked payload too large', [
+        'content_length' => $contentLength,
+        'total_size' => $totalSize,
+        'limit' => IH_MAX_BYTES_TOTAL,
+    ]);
+    echo json_encode([
+        'ok' => false,
+        'error' => 'payload_too_large',
+        'request_id' => api_request_id(),
+    ]);
+    exit;
+}
+
+$rateKey = 'upload_' . (string)($cookieUserId ?? ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+if (!ih_rate_limit_allow($rateKey, IH_RATE_LIMIT_MAX, IH_RATE_LIMIT_WINDOW)) {
+    http_response_code(429);
+    log_msg('warning', 'upload rate limited', [
+        'key' => $rateKey,
+    ]);
+    echo json_encode([
+        'ok' => false,
+        'error' => 'rate_limited',
+        'request_id' => api_request_id(),
+    ]);
+    exit;
+}
+
 $fileSummary = [];
 foreach ($_FILES as $key => $entry) {
     if (!is_array($entry)) {
@@ -147,16 +207,58 @@ $errors = [];
 $added = 0;
 foreach ($files as $file) {
     if (!isset($file['error']) || $file['error'] !== UPLOAD_ERR_OK) {
+        if (($file['error'] ?? null) === UPLOAD_ERR_INI_SIZE || ($file['error'] ?? null) === UPLOAD_ERR_FORM_SIZE) {
+            http_response_code(413);
+            log_msg('warning', 'upload blocked file too large', [
+                'name' => $file['name'] ?? '',
+                'size' => $file['size'] ?? 0,
+                'limit' => IH_MAX_BYTES_PER_FILE,
+            ]);
+            echo json_encode([
+                'ok' => false,
+                'error' => 'file_too_large',
+                'request_id' => api_request_id(),
+            ]);
+            exit;
+        }
         $errors[] = $file['name'] ?? 'Unbekannte Datei';
         continue;
     }
+    if ((int)($file['size'] ?? 0) > IH_MAX_BYTES_PER_FILE) {
+        http_response_code(413);
+        log_msg('warning', 'upload blocked file too large', [
+            'name' => $file['name'] ?? '',
+            'size' => $file['size'] ?? 0,
+            'limit' => IH_MAX_BYTES_PER_FILE,
+        ]);
+        echo json_encode([
+            'ok' => false,
+            'error' => 'file_too_large',
+            'request_id' => api_request_id(),
+        ]);
+        exit;
+    }
     $mime = ih_is_image_file($file['tmp_name']);
     if (!$mime) {
+        $detected = ih_detect_mime_type($file['tmp_name']);
+        log_msg('warning', 'upload blocked unsupported mime', [
+            'name' => $file['name'] ?? '',
+            'client_type' => $file['type'] ?? '',
+            'detected_mime' => $detected,
+        ]);
+        $errors[] = $file['name'] ?? 'Unbekannte Datei';
+        continue;
+    }
+    $extension = ih_extension_for_mime($mime);
+    if (!$extension) {
+        log_msg('warning', 'upload blocked missing extension mapping', [
+            'mime' => $mime,
+            'name' => $file['name'] ?? '',
+        ]);
         $errors[] = $file['name'] ?? 'Unbekannte Datei';
         continue;
     }
     $fileId = ih_generate_id();
-    $extension = ih_guess_extension($file['name'] ?? '', $mime);
     $filename = $fileId . '.' . $extension;
     $destination = $uploadDir . '/' . $filename;
     if (!move_uploaded_file($file['tmp_name'], $destination)) {
