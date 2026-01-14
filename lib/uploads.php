@@ -18,6 +18,16 @@ function ih_storage_dir(): string
     return ih_base_dir() . '/public/storage';
 }
 
+function ih_allowed_mime_types(): array
+{
+    return [
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp',
+    ];
+}
+
 function ih_ensure_dirs(): void
 {
     foreach ([ih_data_dir(), ih_storage_dir()] as $dir) {
@@ -148,20 +158,15 @@ function ih_collect_files(array $files): array
     return $collected;
 }
 
-function ih_guess_extension(string $name, string $mime): string
+function ih_extension_for_mime(string $mime): ?string
 {
-    $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
-    if ($extension && preg_match('/^[a-z0-9]+$/', $extension)) {
-        return $extension;
-    }
     $map = [
         'image/jpeg' => 'jpg',
         'image/png' => 'png',
         'image/gif' => 'gif',
         'image/webp' => 'webp',
-        'image/bmp' => 'bmp',
     ];
-    return $map[$mime] ?? 'bin';
+    return $map[$mime] ?? null;
 }
 
 function ih_public_file_url(string $uploadId, string $filename): string
@@ -174,12 +179,88 @@ function ih_is_image_file(string $tmpName): ?string
     if (!is_file($tmpName)) {
         return null;
     }
+    $mime = ih_detect_mime_type($tmpName);
+    if (!is_string($mime) || $mime === '') {
+        return null;
+    }
+    if (!in_array($mime, ih_allowed_mime_types(), true)) {
+        return null;
+    }
+    if (!ih_magic_bytes_match($tmpName, $mime)) {
+        return null;
+    }
+    return $mime;
+}
+
+function ih_detect_mime_type(string $tmpName): ?string
+{
+    if (!is_file($tmpName)) {
+        return null;
+    }
     $finfo = new finfo(FILEINFO_MIME_TYPE);
     $mime = $finfo->file($tmpName);
-    if ($mime && str_starts_with($mime, 'image/')) {
-        return $mime;
+    return is_string($mime) && $mime !== '' ? $mime : null;
+}
+
+function ih_magic_bytes_match(string $tmpName, string $mime): bool
+{
+    $handle = fopen($tmpName, 'rb');
+    if ($handle === false) {
+        return false;
     }
-    return null;
+    $bytes = fread($handle, 12);
+    fclose($handle);
+    if ($bytes === false) {
+        return false;
+    }
+
+    return match ($mime) {
+        'image/jpeg' => strlen($bytes) >= 3 && substr($bytes, 0, 3) === "\xFF\xD8\xFF",
+        'image/png' => strlen($bytes) >= 8 && substr($bytes, 0, 8) === "\x89PNG\r\n\x1A\n",
+        'image/gif' => strlen($bytes) >= 6 && (substr($bytes, 0, 6) === 'GIF87a' || substr($bytes, 0, 6) === 'GIF89a'),
+        'image/webp' => strlen($bytes) >= 12 && substr($bytes, 0, 4) === 'RIFF' && substr($bytes, 8, 4) === 'WEBP',
+        default => false,
+    };
+}
+
+function ih_rate_limit_allow(string $key, int $limit, int $windowSeconds): bool
+{
+    $baseDir = dirname(__DIR__) . '/storage/ratelimit';
+    if (!is_dir($baseDir)) {
+        mkdir($baseDir, 0777, true);
+    }
+
+    $safeKey = preg_replace('/[^a-zA-Z0-9_-]/', '_', $key);
+    $path = $baseDir . '/' . $safeKey . '.json';
+    $now = time();
+
+    $state = [
+        'reset_at' => $now + $windowSeconds,
+        'remaining' => $limit,
+    ];
+
+    if (is_file($path)) {
+        $contents = file_get_contents($path);
+        $decoded = $contents ? json_decode($contents, true) : null;
+        if (is_array($decoded) && isset($decoded['reset_at'], $decoded['remaining'])) {
+            $state = $decoded;
+        }
+    }
+
+    if (!isset($state['reset_at'], $state['remaining']) || $state['reset_at'] <= $now) {
+        $state = [
+            'reset_at' => $now + $windowSeconds,
+            'remaining' => $limit,
+        ];
+    }
+
+    if ((int)$state['remaining'] <= 0) {
+        return false;
+    }
+
+    $state['remaining'] = (int)$state['remaining'] - 1;
+    file_put_contents($path, json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    return true;
 }
 
 function ih_delete_upload(array $upload): void

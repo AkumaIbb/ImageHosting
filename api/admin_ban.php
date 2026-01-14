@@ -19,9 +19,12 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $cookieUserId = ih_get_user_id_cookie();
 if (!is_admin($cookieUserId)) {
     http_response_code(403);
+    log_msg('warning', 'admin ban auth failed', [
+        'user_id' => $cookieUserId,
+    ]);
     echo json_encode([
         'ok' => false,
-        'error' => 'Nicht autorisiert.',
+        'error' => 'admin_auth_required',
         'request_id' => api_request_id(),
     ]);
     exit;
