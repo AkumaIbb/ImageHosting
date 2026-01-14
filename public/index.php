@@ -277,6 +277,8 @@ if (isset($_GET['id'])) {
 
     <footer>
       <p><?php echo htmlspecialchars(ih_t('footer.disclaimer', $lang), ENT_QUOTES, 'UTF-8'); ?></p>
+      <p><?php echo htmlspecialchars(ih_t('footer.rules', $lang), ENT_QUOTES, 'UTF-8'); ?></p>
+      <p><?php echo htmlspecialchars(ih_t('footer.as_is', $lang), ENT_QUOTES, 'UTF-8'); ?></p>
     </footer>
   </main>
 
