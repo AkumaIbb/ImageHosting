@@ -66,3 +66,90 @@ curl -s -X POST \
   -F "file=@tests/fixtures/oversize.jpg" \
   http://localhost:8000/api/upload.php
 ```
+
+## Security & Betrieb
+
+### Ordnerstruktur & Berechtigungen
+
+Die Anwendung benötigt Schreibrechte für Upload-Metadaten, Logs, Rate-Limits und ausgelieferte Dateien:
+
+- `data/uploads/` (Upload-Metadaten)
+- `public/storage/` (ausgelieferte Bilddateien)
+- `storage/logs/` (App-Logs)
+- `storage/ratelimit/` (Rate-Limit-Zustand)
+
+Empfohlene Rechte (Beispiel, an Webserver-User anpassen):
+
+```bash
+chown -R www-data:www-data data public/storage storage
+chmod 750 data public/storage storage
+chmod 770 storage/logs storage/ratelimit
+```
+
+### Webserver-Härtung
+
+**Apache**: PHP-Ausführung im Storage deaktivieren (mitgeliefertes Beispiel in `public/storage/.htaccess`):
+
+```apache
+php_flag engine off
+RemoveHandler .php .phtml .phar .php3 .php4 .php5 .php7 .php8
+SetHandler None
+Options -ExecCGI
+
+<FilesMatch "\.(php|phtml|phar|php[0-9])$">
+    Require all denied
+</FilesMatch>
+```
+
+**Nginx**: PHP-Ausführung im Storage explizit blockieren:
+
+```nginx
+location ~* ^/storage/.*\.(php|phtml|phar|php[0-9])$ {
+  deny all;
+  return 403;
+}
+```
+
+**Wichtig:** `public/storage/` darf niemals PHP ausführen.
+
+### PHP-Einstellungen (empfohlen)
+
+- `upload_max_filesize = 10M` (passt zu `IH_MAX_BYTES_PER_FILE`)
+- `post_max_size = 50M` (passt zu `IH_MAX_BYTES_TOTAL`)
+- `max_file_uploads = 20` (passt zu `IH_MAX_FILES_PER_REQUEST`)
+- `memory_limit = 128M` (ausreichend für MIME-Erkennung ohne unnötige Überbelegung)
+- `display_errors = Off` (Produktion, keine internen Details)
+
+### Admin-Setup
+
+- Datei mit Admin-IDs: `config/admin_ids.txt` (eine ID pro Zeile, Kommentare mit `#` erlaubt)
+- Admin-ID hinzufügen: eigene `ih_uid`-ID in `config/admin_ids.txt` eintragen
+- Admin-Secret konfigurieren: `config/secret.php` basierend auf `config/secret.sample.php`
+  - `admin_hmac_secret` (HMAC-Key für `ih_admin`-Cookie)
+  - `admin_login_token` (Login-Token für `/admin_login.php`)
+
+**Hinweis:** Admin-IDs sind sensibel, Datei nur für den Betreiber lesbar halten.
+
+### Sicherheitsmodell (kurz)
+
+- Die anonyme User-ID (`ih_uid`) ist der Zugriffsschlüssel (kein Passwort, keine Recovery).
+- Capability-Links (`/v.php?id=...`, `/u.php?id=...`) erlauben Zugriff unabhängig vom User.
+- Uploads mit gebundenem `user_id` sind nur für diesen User oder Admin sichtbar/löschbar.
+- TTL wird serverseitig enforced; abgelaufene Uploads sind nicht mehr abrufbar.
+
+### Known Limitations / Non-Goals
+
+- Keine IP-Sperren oder IP-Blocklisten.
+- Kein Content-Scanning (z. B. SVG- oder Script-Analyse außerhalb der Allowlist).
+- Kein Malware-/AV-Scanning.
+- Keine Abuse-Automation oder Moderations-Workflow.
+
+### Minimaler Security-Check vor Go-Live
+
+1. **Test:** SVG-Upload wird abgelehnt (`415/400` je nach Client) und nicht gespeichert.
+2. **Test:** >10MB Datei liefert `413 file_too_large`.
+3. **Test:** >20 Dateien liefern `413 too_many_files`.
+4. **Test:** Upload-Rate-Limit greift (HTTP `429`).
+5. **Test:** `/api/admin_uploads.php` ohne Admin-Cookie liefert `403`.
+6. **Test:** Fremdes Upload-Delete liefert `403`.
+7. **Test:** Direkter Zugriff auf `/storage/*.php` liefert `403`.
