@@ -218,6 +218,13 @@ if (isset($_GET['id'])) {
       color: #97a1b7;
       font-size: 0.95rem;
     }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 12px;
+    }
   </style>
 </head>
 <body>
@@ -245,6 +252,20 @@ if (isset($_GET['id'])) {
       <div class="status" id="uploadStatus">
         <strong>Bereit für den Upload.</strong>
         <small>Tippe Strg+V, um ein Bild aus der Zwischenablage einzufügen.</small>
+      </div>
+    </section>
+
+    <section class="card" id="accountCard">
+      <h2>Account (anonym)</h2>
+      <p>Optionaler Zugangsschlüssel, um Uploads dauerhaft zu verwalten. Der Schlüssel ist nicht wiederherstellbar.</p>
+      <div class="actions">
+        <button class="button secondary" id="registerButton" type="button">Account anlegen (anonym)</button>
+        <a class="button secondary" id="accountLink" href="/account.php" style="display: none;">Meine Uploads</a>
+        <a class="button secondary" id="adminLink" href="/admin.php" style="display: none;">Admin Panel</a>
+      </div>
+      <div class="status" id="accountStatus">
+        <strong>Noch kein Account hinterlegt.</strong>
+        <small>Du kannst einen anonymen Zugangsschlüssel erstellen und sicher speichern.</small>
       </div>
     </section>
 

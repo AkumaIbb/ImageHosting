@@ -2,44 +2,51 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/uploads.php';
+require_once __DIR__ . '/db.php';
 
 function short_init(): PDO
 {
-    $storageDir = ih_base_dir() . '/storage';
-    if (!is_dir($storageDir)) {
-        mkdir($storageDir, 0777, true);
+    static $initialized = false;
+    $pdo = ih_db();
+    if ($initialized) {
+        return $pdo;
+    }
+    $initialized = true;
+
+    $count = $pdo->query('SELECT COUNT(*) AS total FROM shortcodes')->fetch();
+    $existing = (int)($count['total'] ?? 0);
+    if ($existing > 0) {
+        return $pdo;
     }
 
-    $dbPath = $storageDir . '/shortcodes.sqlite';
-    $pdo = new PDO('sqlite:' . $dbPath, null, null, [
+    $legacyPath = dirname(__DIR__) . '/storage/shortcodes.sqlite';
+    if (!is_file($legacyPath)) {
+        return $pdo;
+    }
+
+    $legacy = new PDO('sqlite:' . $legacyPath, null, null, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
     ]);
 
-    $pdo->exec('PRAGMA busy_timeout=2000');
-    $pdo->exec('PRAGMA journal_mode=WAL');
-    $pdo->exec('CREATE TABLE IF NOT EXISTS shortcodes (
-        code TEXT PRIMARY KEY,
-        upload_id TEXT NOT NULL,
-        expires_at INTEGER NOT NULL,
-        created_at INTEGER NOT NULL
-    )');
-
-    $columns = $pdo->query('PRAGMA table_info(shortcodes)')->fetchAll();
+    $columns = $legacy->query('PRAGMA table_info(shortcodes)')->fetchAll();
     $columnNames = array_map(static fn(array $column): string => $column['name'] ?? '', $columns);
-    if (in_array('target', $columnNames, true) && !in_array('upload_id', $columnNames, true)) {
-        $pdo->exec('ALTER TABLE shortcodes RENAME TO shortcodes_legacy');
-        $pdo->exec('CREATE TABLE shortcodes (
-            code TEXT PRIMARY KEY,
-            upload_id TEXT NOT NULL,
-            expires_at INTEGER NOT NULL,
-            created_at INTEGER NOT NULL
-        )');
+    $rows = [];
+    if (in_array('upload_id', $columnNames, true)) {
+        $rows = $legacy->query('SELECT code, upload_id, expires_at, created_at FROM shortcodes')->fetchAll();
+    } elseif (in_array('target', $columnNames, true)) {
+        $rows = $legacy->query('SELECT code, target, expires_at, created_at FROM shortcodes')->fetchAll();
+    }
 
-        $rows = $pdo->query('SELECT code, target, expires_at, created_at FROM shortcodes_legacy')->fetchAll();
-        $insert = $pdo->prepare('INSERT INTO shortcodes (code, upload_id, expires_at, created_at) VALUES (:code, :upload_id, :expires_at, :created_at)');
-        foreach ($rows as $row) {
-            $target = (string)($row['target'] ?? '');
+    if (!$rows) {
+        return $pdo;
+    }
+
+    $insert = $pdo->prepare('INSERT OR IGNORE INTO shortcodes (code, upload_id, expires_at, created_at) VALUES (:code, :upload_id, :expires_at, :created_at)');
+    foreach ($rows as $row) {
+        $uploadId = $row['upload_id'] ?? null;
+        if (!$uploadId && isset($row['target'])) {
+            $target = (string)$row['target'];
             $parts = parse_url($target);
             if ($parts === false) {
                 continue;
@@ -47,18 +54,17 @@ function short_init(): PDO
             $query = $parts['query'] ?? '';
             parse_str($query, $params);
             $uploadId = ih_sanitize_id($params['id'] ?? null);
-            if (!$uploadId) {
-                continue;
-            }
-            $insert->execute([
-                ':code' => $row['code'],
-                ':upload_id' => $uploadId,
-                ':expires_at' => $row['expires_at'],
-                ':created_at' => $row['created_at'],
-            ]);
         }
-
-        $pdo->exec('DROP TABLE shortcodes_legacy');
+        $uploadId = ih_sanitize_id($uploadId);
+        if (!$uploadId) {
+            continue;
+        }
+        $insert->execute([
+            ':code' => $row['code'],
+            ':upload_id' => $uploadId,
+            ':expires_at' => $row['expires_at'],
+            ':created_at' => $row['created_at'],
+        ]);
     }
 
     return $pdo;
@@ -136,4 +142,11 @@ function short_purge_expired(): void
     $pdo = short_init();
     $stmt = $pdo->prepare('DELETE FROM shortcodes WHERE expires_at <= :now');
     $stmt->execute([':now' => time()]);
+}
+
+function short_delete_by_upload(string $uploadId): void
+{
+    $pdo = short_init();
+    $stmt = $pdo->prepare('DELETE FROM shortcodes WHERE upload_id = :upload_id');
+    $stmt->execute([':upload_id' => $uploadId]);
 }

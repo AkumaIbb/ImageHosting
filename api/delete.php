@@ -3,6 +3,9 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../lib/api_bootstrap.php';
 require_once __DIR__ . '/../lib/uploads.php';
+require_once __DIR__ . '/../lib/users.php';
+require_once __DIR__ . '/../lib/admin.php';
+require_once __DIR__ . '/../lib/shortcodes.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
@@ -23,8 +26,9 @@ if (str_contains($contentType, 'application/json')) {
 
 $uploadId = ih_sanitize_id($payload['upload_id'] ?? null);
 $fileId = $payload['file_id'] ?? $payload['id'] ?? null;
+$deleteUpload = filter_var($payload['delete_upload'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
-if (!$uploadId || !$fileId) {
+if (!$uploadId || (!$fileId && !$deleteUpload)) {
     http_response_code(400);
     echo json_encode([
         'ok' => false,
@@ -41,6 +45,41 @@ if (!$upload) {
         'ok' => false,
         'error' => 'Upload nicht gefunden.',
         'request_id' => api_request_id(),
+    ]);
+    exit;
+}
+
+$cookieUserId = ih_get_user_id_cookie();
+$user = $cookieUserId ? ih_get_user($cookieUserId) : null;
+$isAdmin = $user ? is_admin($cookieUserId) : false;
+if ($user && (int)($user['is_banned'] ?? 0) === 1 && !$isAdmin) {
+    http_response_code(403);
+    echo json_encode([
+        'ok' => false,
+        'error' => 'Account gesperrt.',
+        'request_id' => api_request_id(),
+    ]);
+    exit;
+}
+
+$ownerId = $upload['user_id'] ?? null;
+if ($ownerId && !$isAdmin && $ownerId !== $cookieUserId) {
+    http_response_code(403);
+    echo json_encode([
+        'ok' => false,
+        'error' => 'Nicht autorisiert.',
+        'request_id' => api_request_id(),
+    ]);
+    exit;
+}
+
+if ($deleteUpload) {
+    ih_delete_upload($upload);
+    short_delete_by_upload($uploadId);
+    echo json_encode([
+        'ok' => true,
+        'remaining' => 0,
+        'type' => 'single',
     ]);
     exit;
 }
@@ -71,6 +110,9 @@ if (!$deleted) {
 
 if (!$remaining) {
     ih_delete_upload($upload);
+    if ($uploadId) {
+        short_delete_by_upload($uploadId);
+    }
     echo json_encode([
         'ok' => true,
         'remaining' => 0,

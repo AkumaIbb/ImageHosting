@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/uploads.php';
 require_once __DIR__ . '/shortcodes.php';
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/logger.php';
 
 function ih_maybe_cleanup(int $ttlSeconds = 172800): void
 {
@@ -15,20 +17,34 @@ function ih_maybe_cleanup(int $ttlSeconds = 172800): void
     }
     file_put_contents($lockPath, (string)$now);
 
-    $dataDir = ih_data_dir();
-    if (!is_dir($dataDir)) {
+    $pdo = ih_db();
+    $stmt = $pdo->prepare('SELECT upload_id FROM uploads WHERE expires_at IS NOT NULL AND expires_at <= :now');
+    try {
+        $stmt->execute([':now' => $now]);
+        $expired = $stmt->fetchAll();
+    } catch (Throwable $exception) {
+        log_msg('error', 'cleanup query failed', ['error' => $exception->getMessage()]);
         return;
     }
 
-    foreach (glob($dataDir . '/*.json') as $file) {
-        $payload = json_decode((string)file_get_contents($file), true);
-        if (!is_array($payload) || empty($payload['created_at'])) {
+    foreach ($expired as $row) {
+        $uploadId = ih_sanitize_id($row['upload_id'] ?? null);
+        if (!$uploadId) {
             continue;
         }
-        if ($payload['created_at'] + $ttlSeconds < $now) {
-            ih_delete_upload($payload);
+        $upload = ih_load_upload($uploadId);
+        if ($upload) {
+            ih_delete_upload($upload);
+            short_delete_by_upload($uploadId);
+        } else {
+            $pdo->prepare('DELETE FROM uploads WHERE upload_id = :upload_id')->execute([':upload_id' => $uploadId]);
+            short_delete_by_upload($uploadId);
         }
     }
 
-    short_purge_expired();
+    try {
+        short_purge_expired();
+    } catch (Throwable $exception) {
+        log_msg('warning', 'shortcode purge failed', ['error' => $exception->getMessage()]);
+    }
 }

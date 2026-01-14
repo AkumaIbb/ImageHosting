@@ -5,6 +5,8 @@ require_once __DIR__ . '/../lib/api_bootstrap.php';
 require_once __DIR__ . '/../lib/uploads.php';
 require_once __DIR__ . '/../lib/base_url.php';
 require_once __DIR__ . '/../lib/shortcodes.php';
+require_once __DIR__ . '/../lib/users.php';
+require_once __DIR__ . '/../lib/admin.php';
 
 log_msg('info', 'upload request start', [
     'method' => $_SERVER['REQUEST_METHOD'] ?? 'unknown',
@@ -26,6 +28,22 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 ih_ensure_dirs();
+
+$cookieUserId = ih_get_user_id_cookie();
+$user = $cookieUserId ? ih_get_user($cookieUserId) : null;
+$isAdmin = $user ? is_admin($cookieUserId) : false;
+if ($user && (int)($user['is_banned'] ?? 0) === 1 && !$isAdmin) {
+    http_response_code(403);
+    log_msg('warning', 'upload blocked for banned user', [
+        'user_id' => $cookieUserId,
+    ]);
+    echo json_encode([
+        'ok' => false,
+        'error' => 'Account gesperrt.',
+        'request_id' => api_request_id(),
+    ]);
+    exit;
+}
 
 $uploadId = ih_sanitize_id($_POST['upload_id'] ?? null);
 $files = ih_collect_files($_FILES);
@@ -82,14 +100,41 @@ if ($uploadId) {
         ]);
         exit;
     }
+    $ownerId = $upload['user_id'] ?? null;
+    if ($ownerId && !$isAdmin && $ownerId !== $cookieUserId) {
+        http_response_code(403);
+        log_msg('warning', 'upload ownership mismatch', [
+            'upload_id' => $uploadId,
+            'owner_id' => $ownerId,
+            'user_id' => $cookieUserId,
+        ]);
+        echo json_encode([
+            'ok' => false,
+            'error' => 'Nicht autorisiert.',
+            'request_id' => api_request_id(),
+        ]);
+        exit;
+    }
 } else {
     $uploadId = ih_generate_id();
+    $now = time();
+    $expiresAt = $now + 172800;
+    if ($user) {
+        $ttlSeconds = ih_effective_ttl_seconds($user['ttl_seconds'] !== null ? (int)$user['ttl_seconds'] : null, $isAdmin);
+        if ($ttlSeconds === null) {
+            $expiresAt = null;
+        } else {
+            $expiresAt = $now + $ttlSeconds;
+        }
+    }
     $upload = [
         'id' => $uploadId,
-        'created_at' => time(),
-        'updated_at' => time(),
+        'created_at' => $now,
+        'updated_at' => $now,
         'type' => 'single',
         'files' => [],
+        'user_id' => $user ? $cookieUserId : null,
+        'expires_at' => $expiresAt,
     ];
 }
 
@@ -142,7 +187,7 @@ if ($added === 0) {
 }
 
 $upload['type'] = count($upload['files']) > 1 ? 'album' : 'single';
-$expiresAt = ($upload['created_at'] ?? time()) + 172800;
+$expiresAt = $upload['expires_at'] ?? (($upload['created_at'] ?? time()) + 172800);
 $shortCode = null;
 if (!empty($upload['short_code']) && short_is_valid_code($upload['short_code'])) {
     $existing = short_resolve($upload['short_code']);
@@ -151,7 +196,8 @@ if (!empty($upload['short_code']) && short_is_valid_code($upload['short_code']))
     }
 }
 if (!$shortCode) {
-    $shortCode = short_create($uploadId, $expiresAt);
+    $shortExpiry = $expiresAt ?? IH_SHORTCODE_MAX_EXPIRES;
+    $shortCode = short_create($uploadId, $shortExpiry);
     $upload['short_code'] = $shortCode;
 }
 ih_save_upload($upload);
@@ -174,4 +220,5 @@ echo json_encode([
     'manage_url' => $manageUrl,
     'short_code' => $shortCode,
     'short_url' => $shortUrl,
+    'user_id_present' => (bool)$user,
 ]);
