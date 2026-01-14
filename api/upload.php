@@ -1,15 +1,24 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../lib/api_bootstrap.php';
 require_once __DIR__ . '/../lib/uploads.php';
 
-header('Content-Type: application/json');
+log_msg('info', 'upload request start', [
+    'method' => $_SERVER['REQUEST_METHOD'] ?? 'unknown',
+    'content_type' => $_SERVER['CONTENT_TYPE'] ?? '',
+    'content_length' => $_SERVER['CONTENT_LENGTH'] ?? '',
+]);
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
+    log_msg('warning', 'upload invalid method', [
+        'method' => $_SERVER['REQUEST_METHOD'] ?? 'unknown',
+    ]);
     echo json_encode([
         'ok' => false,
         'error' => 'Nur POST erlaubt.',
+        'request_id' => api_request_id(),
     ]);
     exit;
 }
@@ -18,12 +27,40 @@ ih_ensure_dirs();
 
 $uploadId = ih_sanitize_id($_POST['upload_id'] ?? null);
 $files = ih_collect_files($_FILES);
+$fileSummary = [];
+foreach ($_FILES as $key => $entry) {
+    if (!is_array($entry)) {
+        continue;
+    }
+    if (is_array($entry['name'] ?? null)) {
+        foreach ($entry['name'] as $index => $name) {
+            $fileSummary[] = [
+                'field' => $key,
+                'name' => $name,
+                'size' => $entry['size'][$index] ?? 0,
+                'error' => $entry['error'][$index] ?? UPLOAD_ERR_NO_FILE,
+            ];
+        }
+    } else {
+        $fileSummary[] = [
+            'field' => $key,
+            'name' => $entry['name'] ?? '',
+            'size' => $entry['size'] ?? 0,
+            'error' => $entry['error'] ?? UPLOAD_ERR_NO_FILE,
+        ];
+    }
+}
+log_msg('info', 'upload files received', [
+    'files' => $fileSummary,
+]);
 
 if (!$files) {
     http_response_code(400);
+    log_msg('warning', 'upload missing files');
     echo json_encode([
         'ok' => false,
         'error' => 'Keine Dateien gefunden.',
+        'request_id' => api_request_id(),
     ]);
     exit;
 }
@@ -33,9 +70,13 @@ if ($uploadId) {
     $upload = ih_load_upload($uploadId);
     if (!$upload) {
         http_response_code(404);
+        log_msg('warning', 'upload not found', [
+            'upload_id' => $uploadId,
+        ]);
         echo json_encode([
             'ok' => false,
             'error' => 'Upload nicht gefunden.',
+            'request_id' => api_request_id(),
         ]);
         exit;
     }
@@ -87,9 +128,13 @@ foreach ($files as $file) {
 
 if ($added === 0) {
     http_response_code(400);
+    log_msg('warning', 'upload no valid images', [
+        'errors' => $errors,
+    ]);
     echo json_encode([
         'ok' => false,
         'error' => 'Keine gültigen Bilddateien gefunden.',
+        'request_id' => api_request_id(),
     ]);
     exit;
 }
@@ -97,12 +142,17 @@ if ($added === 0) {
 $upload['type'] = count($upload['files']) > 1 ? 'album' : 'single';
 ih_save_upload($upload);
 
+log_msg('info', 'upload success', [
+    'upload_id' => $uploadId,
+    'type' => $upload['type'],
+    'added' => $added,
+    'skipped' => count($errors),
+]);
+
 echo json_encode([
     'ok' => true,
     'upload_id' => $uploadId,
     'type' => $upload['type'],
     'public_url' => '/v.php?id=' . $uploadId,
     'manage_url' => '/u.php?id=' . $uploadId,
-    'added' => $added,
-    'skipped' => count($errors),
 ]);

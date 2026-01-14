@@ -1,15 +1,15 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../lib/api_bootstrap.php';
 require_once __DIR__ . '/../lib/uploads.php';
-
-header('Content-Type: application/json');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
     echo json_encode([
         'ok' => false,
         'error' => 'Nur POST erlaubt.',
+        'request_id' => api_request_id(),
     ]);
     exit;
 }
@@ -29,6 +29,7 @@ if (!$uploadId || !$fileId) {
     echo json_encode([
         'ok' => false,
         'error' => 'Upload-ID oder Datei-ID fehlt.',
+        'request_id' => api_request_id(),
     ]);
     exit;
 }
@@ -39,6 +40,7 @@ if (!$upload) {
     echo json_encode([
         'ok' => false,
         'error' => 'Upload nicht gefunden.',
+        'request_id' => api_request_id(),
     ]);
     exit;
 }
@@ -62,6 +64,7 @@ if (!$deleted) {
     echo json_encode([
         'ok' => false,
         'error' => 'Datei nicht gefunden.',
+        'request_id' => api_request_id(),
     ]);
     exit;
 }

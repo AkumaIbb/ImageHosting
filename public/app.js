@@ -35,14 +35,28 @@ const renderStatus = (title, detail) => {
 
 const requestJson = async (url, options = {}) => {
   const response = await fetch(url, options);
-  const contentType = response.headers.get('Content-Type') ?? '';
+  const rawText = await response.text();
+
+  console.log('API status', response.status);
+  console.log('API raw response', rawText);
+
+  let data;
+  try {
+    data = rawText ? JSON.parse(rawText) : null;
+  } catch (error) {
+    console.error('API returned invalid JSON', rawText);
+    throw new Error('Ungültige Serverantwort');
+  }
+
+  console.log('API parsed JSON', data);
+
   if (!response.ok) {
-    throw new Error(`Request fehlgeschlagen (${response.status})`);
+    const requestError = new Error('Upload fehlgeschlagen');
+    requestError.requestId = data?.request_id;
+    throw requestError;
   }
-  if (contentType.includes('application/json')) {
-    return response.json();
-  }
-  throw new Error('Ungültige Serverantwort');
+
+  return data;
 };
 
 const addFiles = (incoming, append = true) => {
@@ -124,14 +138,20 @@ uploadButton.addEventListener('click', async () => {
       body: formData,
     });
     if (!data.ok) {
-      throw new Error(data.error || 'Upload fehlgeschlagen.');
+      const apiError = new Error('Upload fehlgeschlagen');
+      apiError.requestId = data.request_id;
+      throw apiError;
     }
     renderStatus('Upload abgeschlossen!', 'Weiterleitung zur Verwaltung ...');
     setTimeout(() => {
       window.location.href = data.manage_url;
     }, 800);
   } catch (error) {
-    renderStatus('Upload fehlgeschlagen.', error.message);
+    console.error('Upload fehlgeschlagen', error);
+    if (error.requestId) {
+      console.error('request_id', error.requestId);
+    }
+    renderStatus('Upload fehlgeschlagen', 'Bitte erneut versuchen.');
   } finally {
     state.isUploading = false;
     dropzone.classList.remove('is-loading');
