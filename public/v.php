@@ -132,7 +132,7 @@ $isMissing = !$upload;
     </section>
   <?php endif; ?>
 
-  <footer>Uploads bleiben 48 Stunden verfügbar.</footer>
+  <footer><p>Hobbyprojekt, nicht in Verbindung mit https://f-list.net</p></footer>
 </main>
 </body>
 </html>
