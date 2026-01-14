@@ -14,6 +14,13 @@ const accountStatus = document.querySelector('#accountStatus');
 const accountLink = document.querySelector('#accountLink');
 const adminLink = document.querySelector('#adminLink');
 
+const i18n = window.IH_I18N || {};
+const t = (key, fallback) => i18n[key] || fallback || key;
+const format = (template, variables = {}) =>
+  template.replace(/\{\{(\w+)\}\}/g, (_, token) =>
+    Object.prototype.hasOwnProperty.call(variables, token) ? variables[token] : ''
+  );
+
 const state = {
   files: [],
   isUploading: false,
@@ -21,7 +28,7 @@ const state = {
 
 const updateFileDisplay = () => {
   if (state.files.length === 0) {
-    fileName.value = 'Keine Dateien ausgewählt';
+    fileName.value = t('app.files_none', 'No files selected');
     return;
   }
   if (state.files.length === 1) {
@@ -29,7 +36,9 @@ const updateFileDisplay = () => {
     fileName.value = `${file.name} (${Math.round(file.size / 1024)} KB)`;
     return;
   }
-  fileName.value = `${state.files.length} Dateien ausgewählt`;
+  fileName.value = format(t('app.files_many', '{{count}} files selected'), {
+    count: state.files.length,
+  });
 };
 
 const renderStatus = (title, detail) => {
@@ -62,13 +71,13 @@ const requestJson = async (url, options = {}) => {
     data = rawText ? JSON.parse(rawText) : null;
   } catch (error) {
     console.error('API returned invalid JSON', rawText);
-    throw new Error('Ungültige Serverantwort');
+    throw new Error(t('app.invalid_response', 'Invalid server response'));
   }
 
   console.log('API parsed JSON', data);
 
   if (!response.ok) {
-    const requestError = new Error('Upload fehlgeschlagen');
+    const requestError = new Error(t('app.upload_failed', 'Upload failed'));
     requestError.requestId = data?.request_id;
     throw requestError;
   }
@@ -88,8 +97,10 @@ const addFiles = (incoming, append = true) => {
   updateFileDisplay();
   if (validFiles.length > 0) {
     renderStatus(
-      `${state.files.length} Bild(er) bereit`,
-      'Klicke auf Upload starten, um fortzufahren.'
+      format(t('app.images_ready_title', '{{count}} image(s) ready'), {
+        count: state.files.length,
+      }),
+      t('app.images_ready_detail', 'Click start upload to continue.')
     );
   }
 };
@@ -137,7 +148,10 @@ window.addEventListener('paste', (event) => {
 
 uploadButton.addEventListener('click', async () => {
   if (state.files.length === 0) {
-    renderStatus('Bitte zuerst ein Bild auswählen.', 'Ziehe Dateien hier hinein oder nutze Strg+V.');
+    renderStatus(
+      t('app.select_image_first', 'Please select an image first.'),
+      t('app.select_image_detail', 'Drag files here or use Ctrl+V.')
+    );
     return;
   }
   const formData = new FormData();
@@ -147,7 +161,10 @@ uploadButton.addEventListener('click', async () => {
 
   state.isUploading = true;
   dropzone.classList.add('is-loading');
-  renderStatus('Upload läuft ...', 'Bitte kurze Geduld.');
+  renderStatus(
+    t('app.upload_in_progress_title', 'Upload in progress ...'),
+    t('app.upload_in_progress_detail', 'Please wait a moment.')
+  );
 
   try {
     const data = await requestJson(api.upload, {
@@ -155,20 +172,26 @@ uploadButton.addEventListener('click', async () => {
       body: formData,
     });
     if (!data.ok) {
-      const apiError = new Error('Upload fehlgeschlagen');
+      const apiError = new Error(t('app.upload_failed', 'Upload failed'));
       apiError.requestId = data.request_id;
       throw apiError;
     }
-    renderStatus('Upload abgeschlossen!', 'Weiterleitung zur Verwaltung ...');
+    renderStatus(
+      t('app.upload_done_title', 'Upload complete!'),
+      t('app.upload_done_detail', 'Redirecting to management ...')
+    );
     setTimeout(() => {
       window.location.href = data.manage_url;
     }, 800);
   } catch (error) {
-    console.error('Upload fehlgeschlagen', error);
+    console.error(t('app.upload_failed', 'Upload failed'), error);
     if (error.requestId) {
       console.error('request_id', error.requestId);
     }
-    renderStatus('Upload fehlgeschlagen', 'Bitte erneut versuchen.');
+    renderStatus(
+      t('app.upload_failed_title', 'Upload failed'),
+      t('app.upload_failed_detail', 'Please try again.')
+    );
   } finally {
     state.isUploading = false;
     dropzone.classList.remove('is-loading');
@@ -183,8 +206,11 @@ const initAccount = async () => {
     const data = await requestJson(api.me);
     if (data?.user_id) {
       renderAccountStatus(
-        'Account aktiv.',
-        'Dein Zugangsschlüssel ist im Cookie hinterlegt. Bitte sicher aufbewahren.'
+        t('app.account_active_title', 'Account active.'),
+        t(
+          'app.account_active_detail',
+          'Your access key is stored in the cookie. Please keep it safe.'
+        )
       );
       if (accountLink) {
         accountLink.style.display = 'inline-flex';
@@ -204,7 +230,10 @@ const initAccount = async () => {
 
 if (registerButton) {
   registerButton.addEventListener('click', async () => {
-    renderAccountStatus('Account wird erstellt ...', 'Bitte kurz warten.');
+    renderAccountStatus(
+      t('app.account_create_title', 'Creating account ...'),
+      t('app.account_create_detail', 'Please wait.')
+    );
     try {
       const data = await requestJson(api.register, { method: 'POST' });
       if (!data?.user_id) {
@@ -221,11 +250,15 @@ if (registerButton) {
       const extra = `
         <div style="margin-top: 10px; display: grid; gap: 6px;">
           <code style="font-size: 1rem; word-break: break-all;">${userId}</code>
-          <button class="button" id="copyUserId" type="button">Zugangsschlüssel kopieren</button>
-          <small>Dieser Schlüssel ist nicht wiederherstellbar. Bitte sicher speichern.</small>
+          <button class="button" id="copyUserId" type="button">${t('app.copy_key_label', 'Copy access key')}</button>
+          <small>${t('app.copy_key_note', 'This key cannot be recovered. Please store it safely.')}</small>
         </div>
       `;
-      renderAccountStatus('Account erstellt.', 'Zugangsschlüssel einmalig angezeigt:', extra);
+      renderAccountStatus(
+        t('app.account_created_title', 'Account created.'),
+        t('app.account_created_detail', 'Access key shown once:'),
+        extra
+      );
       if (accountLink) {
         accountLink.style.display = 'inline-flex';
       }
@@ -244,7 +277,10 @@ if (registerButton) {
       }
     } catch (error) {
       console.error('Account registration failed', error);
-      renderAccountStatus('Account konnte nicht erstellt werden.', 'Bitte erneut versuchen.');
+      renderAccountStatus(
+        t('app.account_create_failed_title', 'Account could not be created.'),
+        t('app.account_create_failed_detail', 'Please try again.')
+      );
     }
   });
 }

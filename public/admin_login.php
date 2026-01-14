@@ -4,11 +4,16 @@ declare(strict_types=1);
 require_once __DIR__ . '/../lib/users.php';
 require_once __DIR__ . '/../lib/admin.php';
 require_once __DIR__ . '/../lib/logger.php';
+require_once __DIR__ . '/../lib/i18n.php';
+require_once __DIR__ . '/../lib/layout.php';
+
+$lang = ih_get_language();
+$translations = ih_i18n_payload($lang);
 
 $cookieUserId = ih_get_user_id_cookie();
 if (!$cookieUserId) {
     http_response_code(403);
-    echo 'Nicht autorisiert.';
+    echo htmlspecialchars(ih_t('admin_login.unauthorized', $lang), ENT_QUOTES, 'UTF-8');
     exit;
 }
 
@@ -21,12 +26,12 @@ $error = null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $token = trim((string)($_POST['admin_token'] ?? ''));
     if ($token === '') {
-        $error = 'Login fehlgeschlagen.';
+        $error = ih_t('admin_login.error', $lang);
     } elseif (!ih_admin_login($cookieUserId, $token)) {
         log_msg('warning', 'admin login failed', [
             'user_id' => $cookieUserId,
         ]);
-        $error = 'Login fehlgeschlagen.';
+        $error = ih_t('admin_login.error', $lang);
     } else {
         log_msg('info', 'admin login success', [
             'user_id' => $cookieUserId,
@@ -37,16 +42,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 ?>
 <!DOCTYPE html>
-<html lang="de">
+<html lang="<?php echo htmlspecialchars($lang, ENT_QUOTES, 'UTF-8'); ?>">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Admin Login – ImageHosting</title>
+  <title><?php echo htmlspecialchars(ih_t('admin_login.title', $lang), ENT_QUOTES, 'UTF-8'); ?> – ImageHosting</title>
+  <link rel="stylesheet" href="/shared.css">
   <style>
-    :root {
-      color-scheme: dark;
-      font-family: "Segoe UI", "Inter", system-ui, -apple-system, sans-serif;
-    }
     * {
       box-sizing: border-box;
       margin: 0;
@@ -58,11 +60,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       color: #eef2f8;
       display: flex;
       justify-content: center;
-      align-items: center;
       padding: 40px 16px;
     }
-    .card {
+    .page {
       width: min(520px, 100%);
+      display: grid;
+      gap: 20px;
+    }
+    .card {
       background: rgba(13, 16, 24, 0.72);
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 18px;
@@ -113,17 +118,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   </style>
 </head>
 <body>
-  <main class="card">
-    <h1>Admin Login</h1>
-    <p>Bitte Admin-Token eingeben, um den Adminbereich zu öffnen.</p>
-    <?php if ($error): ?>
-      <div class="status error"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div>
-    <?php endif; ?>
-    <form method="post">
-      <input class="input" type="password" name="admin_token" placeholder="Admin Token" autocomplete="current-password" required>
-      <div style="height: 12px;"></div>
-      <button class="button" type="submit">Anmelden</button>
-    </form>
-  </main>
+  <div class="page">
+    <?php ih_render_topbar($lang, true, false); ?>
+    <main class="card">
+      <h1><?php echo htmlspecialchars(ih_t('admin_login.title', $lang), ENT_QUOTES, 'UTF-8'); ?></h1>
+      <p><?php echo htmlspecialchars(ih_t('admin_login.subtitle', $lang), ENT_QUOTES, 'UTF-8'); ?></p>
+      <?php if ($error): ?>
+        <div class="status error"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div>
+      <?php endif; ?>
+      <form method="post">
+        <input class="input" type="password" name="admin_token" placeholder="<?php echo htmlspecialchars(ih_t('admin_login.placeholder', $lang), ENT_QUOTES, 'UTF-8'); ?>" autocomplete="current-password" required>
+        <div style="height: 12px;"></div>
+        <button class="button" type="submit"><?php echo htmlspecialchars(ih_t('admin_login.button', $lang), ENT_QUOTES, 'UTF-8'); ?></button>
+      </form>
+    </main>
+  </div>
+
+  <script>
+    window.IH_LANG = <?php echo json_encode($lang); ?>;
+    window.IH_I18N = <?php echo json_encode($translations, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+  </script>
+  <script src="/lang.js"></script>
 </body>
 </html>

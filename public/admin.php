@@ -4,8 +4,12 @@ declare(strict_types=1);
 require_once __DIR__ . '/../lib/cleanup.php';
 require_once __DIR__ . '/../lib/users.php';
 require_once __DIR__ . '/../lib/admin.php';
+require_once __DIR__ . '/../lib/i18n.php';
+require_once __DIR__ . '/../lib/layout.php';
 
 ih_maybe_cleanup();
+$lang = ih_get_language();
+$translations = ih_i18n_payload($lang);
 
 $cookieUserId = ih_get_user_id_cookie();
 if (!is_admin($cookieUserId)) {
@@ -14,16 +18,13 @@ if (!is_admin($cookieUserId)) {
 }
 ?>
 <!DOCTYPE html>
-<html lang="de">
+<html lang="<?php echo htmlspecialchars($lang, ENT_QUOTES, 'UTF-8'); ?>">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Admin Panel – ImageHosting</title>
+  <title><?php echo htmlspecialchars(ih_t('admin.title', $lang), ENT_QUOTES, 'UTF-8'); ?> – ImageHosting</title>
+  <link rel="stylesheet" href="/shared.css">
   <style>
-    :root {
-      color-scheme: dark;
-      font-family: "Segoe UI", "Inter", system-ui, -apple-system, sans-serif;
-    }
     * {
       box-sizing: border-box;
       margin: 0;
@@ -133,33 +134,46 @@ if (!is_admin($cookieUserId)) {
 </head>
 <body>
 <main>
+  <?php ih_render_topbar($lang, $cookieUserId !== null, true); ?>
   <header>
-    <h1>Admin Panel</h1>
-    <p>Alle Uploads verwalten und User sperren.</p>
+    <h1><?php echo htmlspecialchars(ih_t('admin.title', $lang), ENT_QUOTES, 'UTF-8'); ?></h1>
+    <p><?php echo htmlspecialchars(ih_t('admin.subtitle', $lang), ENT_QUOTES, 'UTF-8'); ?></p>
   </header>
 
   <section class="card">
-    <h2>Filter</h2>
+    <h2><?php echo htmlspecialchars(ih_t('admin.filter_title', $lang), ENT_QUOTES, 'UTF-8'); ?></h2>
     <div class="row">
-      <input class="input" id="filterUserId" type="text" placeholder="User-ID filtern (optional)">
-      <button class="button secondary" id="applyFilter" type="button">Filter anwenden</button>
-      <button class="button secondary" id="clearFilter" type="button">Filter löschen</button>
+      <input class="input" id="filterUserId" type="text" placeholder="<?php echo htmlspecialchars(ih_t('admin.filter_placeholder', $lang), ENT_QUOTES, 'UTF-8'); ?>">
+      <button class="button secondary" id="applyFilter" type="button"><?php echo htmlspecialchars(ih_t('admin.filter_apply', $lang), ENT_QUOTES, 'UTF-8'); ?></button>
+      <button class="button secondary" id="clearFilter" type="button"><?php echo htmlspecialchars(ih_t('admin.filter_clear', $lang), ENT_QUOTES, 'UTF-8'); ?></button>
     </div>
-    <div class="status" id="adminStatus">Bereit.</div>
+    <div class="status" id="adminStatus"><?php echo htmlspecialchars(ih_t('admin.status_ready', $lang), ENT_QUOTES, 'UTF-8'); ?></div>
   </section>
 
   <section class="card">
-    <h2>Uploads</h2>
+    <h2><?php echo htmlspecialchars(ih_t('admin.uploads_title', $lang), ENT_QUOTES, 'UTF-8'); ?></h2>
     <div class="grid" id="uploadsGrid"></div>
     <div class="pagination">
-      <button class="button secondary" id="prevPage" type="button">Zurück</button>
+      <button class="button secondary" id="prevPage" type="button"><?php echo htmlspecialchars(ih_t('admin.pagination_prev', $lang), ENT_QUOTES, 'UTF-8'); ?></button>
       <span id="pageInfo"></span>
-      <button class="button secondary" id="nextPage" type="button">Weiter</button>
+      <button class="button secondary" id="nextPage" type="button"><?php echo htmlspecialchars(ih_t('admin.pagination_next', $lang), ENT_QUOTES, 'UTF-8'); ?></button>
     </div>
   </section>
 </main>
 
 <script>
+  window.IH_LANG = <?php echo json_encode($lang); ?>;
+  window.IH_I18N = <?php echo json_encode($translations, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+</script>
+<script src="/lang.js"></script>
+<script>
+  const i18n = window.IH_I18N || {};
+  const t = (key, fallback) => i18n[key] || fallback || key;
+  const format = (template, variables = {}) =>
+    template.replace(/\{\{(\w+)\}\}/g, (_, token) =>
+      Object.prototype.hasOwnProperty.call(variables, token) ? variables[token] : ''
+    );
+
   const state = { page: 1, perPage: 24, total: 0, filterUserId: '' };
   const adminStatus = document.getElementById('adminStatus');
   const filterInput = document.getElementById('filterUserId');
@@ -168,7 +182,11 @@ if (!is_admin($cookieUserId)) {
   const nextPage = document.getElementById('nextPage');
   const pageInfo = document.getElementById('pageInfo');
 
-  const fallbackImage = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200"><rect width="100%" height="100%" fill="#111723"/><text x="50%" y="50%" fill="#6c768f" font-family="Segoe UI, sans-serif" font-size="16" dominant-baseline="middle" text-anchor="middle">No preview</text></svg>');
+  const fallbackImage =
+    'data:image/svg+xml;utf8,' +
+    encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200"><rect width="100%" height="100%" fill="#111723"/><text x="50%" y="50%" fill="#6c768f" font-family="Segoe UI, sans-serif" font-size="16" dominant-baseline="middle" text-anchor="middle">${t('account.no_preview', 'No preview')}</text></svg>`
+    );
 
   const requestJson = async (url, options = {}) => {
     const response = await fetch(url, options);
@@ -193,7 +211,7 @@ if (!is_admin($cookieUserId)) {
   const renderUploads = (items) => {
     uploadsGrid.innerHTML = '';
     if (!items.length) {
-      uploadsGrid.innerHTML = '<p>Keine Uploads gefunden.</p>';
+      uploadsGrid.innerHTML = `<p>${t('admin.no_uploads', 'No uploads found.')}</p>`;
       return;
     }
     items.forEach((item) => {
@@ -201,27 +219,30 @@ if (!is_admin($cookieUserId)) {
       card.className = 'thumb';
       const img = document.createElement('img');
       img.src = item.preview_url || fallbackImage;
-      img.alt = 'Upload Vorschau';
+      img.alt = t('admin.upload_preview_alt', 'Upload preview');
       const meta = document.createElement('small');
-      meta.textContent = `Upload ${item.upload_id} | User ${item.user_id ?? 'anonymous'}`;
+      meta.textContent = format(t('admin.upload_label', 'Upload {{id}} | User {{user}}'), {
+        id: item.upload_id,
+        user: item.user_id ?? t('common.anonymous', 'anonymous'),
+      });
       const actions = document.createElement('div');
       actions.className = 'row';
       if (item.public_url) {
         const publicLink = document.createElement('a');
         publicLink.className = 'button secondary';
         publicLink.href = item.public_url;
-        publicLink.textContent = 'Public';
+        publicLink.textContent = t('common.public', 'Public');
         actions.appendChild(publicLink);
       }
       const manageLink = document.createElement('a');
       manageLink.className = 'button secondary';
       manageLink.href = item.manage_url;
-      manageLink.textContent = 'Manage';
+      manageLink.textContent = t('common.manage', 'Manage');
       actions.appendChild(manageLink);
 
       const deleteButton = document.createElement('button');
       deleteButton.className = 'button secondary';
-      deleteButton.textContent = 'Löschen';
+      deleteButton.textContent = t('common.delete', 'Delete');
       deleteButton.addEventListener('click', async () => {
         deleteButton.disabled = true;
         try {
@@ -232,7 +253,7 @@ if (!is_admin($cookieUserId)) {
           });
           loadUploads();
         } catch (error) {
-          setStatus('Löschen fehlgeschlagen.');
+          setStatus(t('admin.delete_failed', 'Delete failed.'));
           deleteButton.disabled = false;
         }
       });
@@ -241,7 +262,9 @@ if (!is_admin($cookieUserId)) {
       if (item.user_id) {
         const banButton = document.createElement('button');
         banButton.className = 'button secondary';
-        banButton.textContent = item.is_banned ? 'Entsperren' : 'Sperren';
+        banButton.textContent = item.is_banned
+          ? t('admin.unban', 'Unban')
+          : t('admin.ban', 'Ban');
         banButton.addEventListener('click', async () => {
           banButton.disabled = true;
           try {
@@ -252,7 +275,7 @@ if (!is_admin($cookieUserId)) {
             });
             loadUploads();
           } catch (error) {
-            setStatus('Ban-Update fehlgeschlagen.');
+            setStatus(t('admin.ban_failed', 'Ban update failed.'));
             banButton.disabled = false;
           }
         });
@@ -274,7 +297,7 @@ if (!is_admin($cookieUserId)) {
       renderUploads(data.items);
       updatePagination();
     } catch (error) {
-      uploadsGrid.innerHTML = '<p>Uploads konnten nicht geladen werden.</p>';
+      uploadsGrid.innerHTML = `<p>${t('admin.uploads_error', 'Uploads could not be loaded.')}</p>`;
     }
   };
 

@@ -4,8 +4,14 @@ declare(strict_types=1);
 require_once __DIR__ . '/../lib/cleanup.php';
 require_once __DIR__ . '/../lib/uploads.php';
 require_once __DIR__ . '/../lib/shortcodes.php';
+require_once __DIR__ . '/../lib/users.php';
+require_once __DIR__ . '/../lib/admin.php';
+require_once __DIR__ . '/../lib/i18n.php';
+require_once __DIR__ . '/../lib/layout.php';
 
 ih_maybe_cleanup();
+$lang = ih_get_language();
+$translations = ih_i18n_payload($lang);
 
 $code = (string)($_GET['id'] ?? '');
 $uploadId = null;
@@ -19,18 +25,18 @@ if (short_is_valid_code($code)) {
 
 $upload = $uploadId ? ih_load_upload($uploadId) : null;
 $isMissing = !$upload;
+$cookieUserId = ih_get_user_id_cookie();
+$isLoggedIn = $cookieUserId !== null;
+$isAdmin = $cookieUserId ? is_admin($cookieUserId) : false;
 ?>
 <!DOCTYPE html>
-<html lang="de">
+<html lang="<?php echo htmlspecialchars($lang, ENT_QUOTES, 'UTF-8'); ?>">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Galerie – ImageHosting</title>
+  <title><?php echo htmlspecialchars(ih_t('gallery.title', $lang), ENT_QUOTES, 'UTF-8'); ?> – ImageHosting</title>
+  <link rel="stylesheet" href="/shared.css">
   <style>
-    :root {
-      color-scheme: dark;
-      font-family: "Segoe UI", "Inter", system-ui, -apple-system, sans-serif;
-    }
     * {
       box-sizing: border-box;
       margin: 0;
@@ -104,35 +110,42 @@ $isMissing = !$upload;
 </head>
 <body>
 <main>
+  <?php ih_render_topbar($lang, $isLoggedIn, $isAdmin); ?>
   <header>
-    <h1>Galerie</h1>
-    <p>Öffentliche Ansicht dieses Uploads.</p>
+    <h1><?php echo htmlspecialchars(ih_t('gallery.title', $lang), ENT_QUOTES, 'UTF-8'); ?></h1>
+    <p><?php echo htmlspecialchars(ih_t('gallery.subtitle', $lang), ENT_QUOTES, 'UTF-8'); ?></p>
   </header>
 
   <?php if ($isMissing): ?>
     <section class="card">
-      <h2>Nicht verfügbar</h2>
-      <p>Dieser Upload ist abgelaufen oder wurde gelöscht.</p>
+      <h2><?php echo htmlspecialchars(ih_t('gallery.missing_title', $lang), ENT_QUOTES, 'UTF-8'); ?></h2>
+      <p><?php echo htmlspecialchars(ih_t('gallery.missing_detail', $lang), ENT_QUOTES, 'UTF-8'); ?></p>
     </section>
   <?php elseif ($upload['type'] === 'single'): ?>
     <section class="card single">
       <?php $file = $upload['files'][0]; ?>
-      <img src="<?php echo ih_public_file_url($uploadId, $file['filename']); ?>" alt="Bild">
+      <img src="<?php echo ih_public_file_url($uploadId, $file['filename']); ?>" alt="<?php echo htmlspecialchars(ih_t('gallery.image_alt', $lang), ENT_QUOTES, 'UTF-8'); ?>">
     </section>
   <?php else: ?>
     <section class="card">
       <div class="grid">
         <?php foreach ($upload['files'] as $file): ?>
           <div class="thumb">
-            <img src="<?php echo ih_public_file_url($uploadId, $file['filename']); ?>" alt="Bild">
-            <a href="<?php echo ih_public_file_url($uploadId, $file['filename']); ?>" target="_blank" rel="noopener">Direktlink öffnen</a>
+            <img src="<?php echo ih_public_file_url($uploadId, $file['filename']); ?>" alt="<?php echo htmlspecialchars(ih_t('gallery.image_alt', $lang), ENT_QUOTES, 'UTF-8'); ?>">
+            <a href="<?php echo ih_public_file_url($uploadId, $file['filename']); ?>" target="_blank" rel="noopener"><?php echo htmlspecialchars(ih_t('gallery.direct_link', $lang), ENT_QUOTES, 'UTF-8'); ?></a>
           </div>
         <?php endforeach; ?>
       </div>
     </section>
   <?php endif; ?>
 
-  <footer><p>Hobbyprojekt, nicht in Verbindung mit https://f-list.net</p></footer>
+  <footer><p><?php echo htmlspecialchars(ih_t('footer.disclaimer', $lang), ENT_QUOTES, 'UTF-8'); ?></p></footer>
 </main>
+
+<script>
+  window.IH_LANG = <?php echo json_encode($lang); ?>;
+  window.IH_I18N = <?php echo json_encode($translations, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+</script>
+<script src="/lang.js"></script>
 </body>
 </html>

@@ -5,8 +5,12 @@ require_once __DIR__ . '/../lib/cleanup.php';
 require_once __DIR__ . '/../lib/uploads.php';
 require_once __DIR__ . '/../lib/users.php';
 require_once __DIR__ . '/../lib/admin.php';
+require_once __DIR__ . '/../lib/i18n.php';
+require_once __DIR__ . '/../lib/layout.php';
 
 ih_maybe_cleanup();
+$lang = ih_get_language();
+$translations = ih_i18n_payload($lang);
 
 $uploadId = ih_sanitize_id($_GET['id'] ?? null);
 $upload = $uploadId ? ih_load_upload($uploadId) : null;
@@ -15,30 +19,32 @@ $publicUrl = $shortCode ? '/v.php?id=' . $shortCode : null;
 $isMissing = !$upload;
 $cookieUserId = ih_get_user_id_cookie();
 $isAdmin = is_admin($cookieUserId);
+$isLoggedIn = $cookieUserId !== null;
 $ownerId = is_array($upload) ? ($upload['user_id'] ?? null) : null;
 $isAuthorized = !$ownerId || $isAdmin || ($cookieUserId && $ownerId === $cookieUserId);
 $expiresAt = is_array($upload) ? ($upload['expires_at'] ?? null) : null;
 if ($expiresAt !== null) {
   $expiresAt = (int)$expiresAt;
 }
-$expiresLabel = 'Uploads bleiben 48 Stunden verfügbar.';
+$expiresLabel = ih_t('manage.expires_default', $lang);
 if ($expiresAt === null && !$isMissing) {
-  $expiresLabel = 'Uploads bleiben unbegrenzt verfügbar.';
+  $expiresLabel = ih_t('manage.expires_unlimited', $lang);
 } elseif (is_int($expiresAt) && !$isMissing) {
-  $expiresLabel = 'Ablauf: ' . date('Y-m-d H:i', $expiresAt);
+  $expiresLabel = str_replace(
+      '{{date}}',
+      date('Y-m-d H:i', $expiresAt),
+      ih_t('manage.expires_at', $lang)
+  );
 }
 ?>
 <!DOCTYPE html>
-<html lang="de">
+<html lang="<?php echo htmlspecialchars($lang, ENT_QUOTES, 'UTF-8'); ?>">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Upload verwalten – ImageHosting</title>
+  <title><?php echo htmlspecialchars(ih_t('manage.title', $lang), ENT_QUOTES, 'UTF-8'); ?> – ImageHosting</title>
+  <link rel="stylesheet" href="/shared.css">
   <style>
-    :root {
-      color-scheme: dark;
-      font-family: "Segoe UI", "Inter", system-ui, -apple-system, sans-serif;
-    }
     * {
       box-sizing: border-box;
       margin: 0;
@@ -170,52 +176,53 @@ if ($expiresAt === null && !$isMissing) {
 </head>
 <body>
 <main>
+  <?php ih_render_topbar($lang, $isLoggedIn, $isAdmin); ?>
   <header>
-    <h1>Upload verwalten</h1>
-    <p>Teile den Verwaltungslink nur mit Personen, die Inhalte bearbeiten dürfen.</p>
+    <h1><?php echo htmlspecialchars(ih_t('manage.title', $lang), ENT_QUOTES, 'UTF-8'); ?></h1>
+    <p><?php echo htmlspecialchars(ih_t('manage.subtitle', $lang), ENT_QUOTES, 'UTF-8'); ?></p>
   </header>
 
   <?php if ($isMissing): ?>
     <section class="card">
-      <h2>Upload nicht gefunden</h2>
-      <p>Dieser Upload ist abgelaufen oder wurde gelöscht. Bitte starte einen neuen Upload.</p>
-      <a class="button" href="/">Zur Startseite</a>
+      <h2><?php echo htmlspecialchars(ih_t('manage.missing_title', $lang), ENT_QUOTES, 'UTF-8'); ?></h2>
+      <p><?php echo htmlspecialchars(ih_t('manage.missing_detail', $lang), ENT_QUOTES, 'UTF-8'); ?></p>
+      <a class="button" href="/"><?php echo htmlspecialchars(ih_t('manage.back_home', $lang), ENT_QUOTES, 'UTF-8'); ?></a>
     </section>
   <?php else: ?>
     <section class="card">
-      <h2><?php echo $upload['type'] === 'album' ? 'Album-Upload' : 'Einzelbild-Upload'; ?></h2>
+      <h2><?php echo htmlspecialchars($upload['type'] === 'album' ? ih_t('manage.upload_album', $lang) : ih_t('manage.upload_single', $lang), ENT_QUOTES, 'UTF-8'); ?></h2>
       <div class="actions">
         <?php if ($publicUrl): ?>
-          <a class="button secondary" href="<?php echo $publicUrl; ?>">Öffentliche Ansicht</a>
+          <a class="button secondary" href="<?php echo $publicUrl; ?>"><?php echo htmlspecialchars(ih_t('manage.public_view', $lang), ENT_QUOTES, 'UTF-8'); ?></a>
         <?php else: ?>
-          <span class="button secondary" aria-disabled="true">Öffentliche Ansicht nicht verfügbar</span>
+          <span class="button secondary" aria-disabled="true"><?php echo htmlspecialchars(ih_t('manage.public_unavailable', $lang), ENT_QUOTES, 'UTF-8'); ?></span>
         <?php endif; ?>
         <?php if ($isAuthorized): ?>
-          <button class="button" id="addButton" type="button">Weitere Bilder hinzufügen</button>
+          <button class="button" id="addButton" type="button"><?php echo htmlspecialchars(ih_t('manage.add_images', $lang), ENT_QUOTES, 'UTF-8'); ?></button>
         <?php endif; ?>
       </div>
       <?php if ($isAuthorized): ?>
         <div class="dropzone" id="dropzone">
-          <p>Ziehe Bilder hier hinein oder füge sie per Strg+V hinzu.</p>
-          <label class="button secondary" for="fileInput">Bilder auswählen</label>
+          <p><?php echo htmlspecialchars(ih_t('manage.drop_hint', $lang), ENT_QUOTES, 'UTF-8'); ?></p>
+          <label class="button secondary" for="fileInput"><?php echo htmlspecialchars(ih_t('manage.select_images', $lang), ENT_QUOTES, 'UTF-8'); ?></label>
           <input id="fileInput" type="file" accept="image/*" multiple>
-          <input id="fileName" type="text" class="input" readonly placeholder="Keine Dateien ausgewählt">
+          <input id="fileName" type="text" class="input" readonly placeholder="<?php echo htmlspecialchars(ih_t('manage.file_placeholder', $lang), ENT_QUOTES, 'UTF-8'); ?>">
         </div>
       <?php else: ?>
-        <div class="status">Dieser Upload gehört zu einem Account. Aktionen sind nur mit passendem Zugangsschlüssel möglich.</div>
+        <div class="status"><?php echo htmlspecialchars(ih_t('manage.not_authorized', $lang), ENT_QUOTES, 'UTF-8'); ?></div>
       <?php endif; ?>
-      <div class="status" id="status">Bereit.</div>
+      <div class="status" id="status"><?php echo htmlspecialchars(ih_t('manage.status_ready', $lang), ENT_QUOTES, 'UTF-8'); ?></div>
     </section>
 
     <section class="card">
-      <h2>Inhalte</h2>
+      <h2><?php echo htmlspecialchars(ih_t('manage.contents_title', $lang), ENT_QUOTES, 'UTF-8'); ?></h2>
       <div class="grid">
         <?php foreach ($upload['files'] as $file): ?>
           <div class="thumb">
-            <img src="<?php echo ih_public_file_url($uploadId, $file['filename']); ?>" alt="Upload Bild">
+            <img src="<?php echo ih_public_file_url($uploadId, $file['filename']); ?>" alt="<?php echo htmlspecialchars(ih_t('manage.image_alt', $lang), ENT_QUOTES, 'UTF-8'); ?>">
             <small><?php echo htmlspecialchars($file['original'], ENT_QUOTES); ?></small>
             <?php if ($isAuthorized): ?>
-              <button class="button secondary delete-button" data-file-id="<?php echo $file['id']; ?>" type="button">Bild löschen</button>
+              <button class="button secondary delete-button" data-file-id="<?php echo $file['id']; ?>" type="button"><?php echo htmlspecialchars(ih_t('manage.delete_image', $lang), ENT_QUOTES, 'UTF-8'); ?></button>
             <?php endif; ?>
           </div>
         <?php endforeach; ?>
@@ -226,8 +233,21 @@ if ($expiresAt === null && !$isMissing) {
   <footer><?php echo htmlspecialchars($expiresLabel, ENT_QUOTES); ?></footer>
 </main>
 
+<script>
+  window.IH_LANG = <?php echo json_encode($lang); ?>;
+  window.IH_I18N = <?php echo json_encode($translations, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+</script>
+<script src="/lang.js"></script>
+
 <?php if (!$isMissing && $isAuthorized): ?>
 <script>
+  const i18n = window.IH_I18N || {};
+  const t = (key, fallback) => i18n[key] || fallback || key;
+  const format = (template, variables = {}) =>
+    template.replace(/\{\{(\w+)\}\}/g, (_, token) =>
+      Object.prototype.hasOwnProperty.call(variables, token) ? variables[token] : ''
+    );
+
   const uploadId = <?php echo json_encode($uploadId); ?>;
   const dropzone = document.getElementById('dropzone');
   const fileInput = document.getElementById('fileInput');
@@ -243,21 +263,27 @@ if ($expiresAt === null && !$isMissing) {
 
   const updateFileDisplay = () => {
     if (state.files.length === 0) {
-      fileName.value = 'Keine Dateien ausgewählt';
+      fileName.value = t('manage.files_none', 'No files selected');
       return;
     }
-    fileName.value = `${state.files.length} Datei(en) ausgewählt`;
+    fileName.value = format(t('manage.files_selected', '{{count}} files selected'), {
+      count: state.files.length,
+    });
   };
 
   const addFiles = (files) => {
     const images = Array.from(files).filter((file) => file.type.startsWith('image/'));
     if (images.length === 0) {
-      renderStatus('Bitte nur Bilddateien hinzufügen.');
+      renderStatus(t('manage.only_images', 'Please add image files only.'));
       return;
     }
     state.files = images;
     updateFileDisplay();
-    renderStatus(`${images.length} Bild(er) bereit zum Hochladen.`);
+    renderStatus(
+      format(t('manage.images_ready', '{{count}} image(s) ready to upload.'), {
+        count: images.length,
+      })
+    );
   };
 
   ['dragenter', 'dragover'].forEach((eventName) => {
@@ -303,7 +329,7 @@ if ($expiresAt === null && !$isMissing) {
 
   const uploadFiles = async () => {
     if (state.files.length === 0) {
-      renderStatus('Bitte zuerst Bilder auswählen.');
+      renderStatus(t('manage.select_images_first', 'Please select images first.'));
       return;
     }
     const formData = new FormData();
@@ -314,7 +340,7 @@ if ($expiresAt === null && !$isMissing) {
 
     state.isUploading = true;
     dropzone.classList.add('is-loading');
-    renderStatus('Upload läuft ...');
+    renderStatus(t('manage.upload_running', 'Upload in progress ...'));
 
     try {
       const response = await fetch('/api/upload.php', {
@@ -325,7 +351,7 @@ if ($expiresAt === null && !$isMissing) {
       if (!response.ok || !data.ok) {
         throw new Error(data.error || 'Upload fehlgeschlagen.');
       }
-      renderStatus('Upload abgeschlossen. Seite wird aktualisiert ...');
+      renderStatus(t('manage.upload_done', 'Upload complete. Reloading ...'));
       window.location.reload();
     } catch (error) {
       renderStatus(error.message);
@@ -343,7 +369,7 @@ if ($expiresAt === null && !$isMissing) {
       if (!fileId) {
         return;
       }
-      renderStatus('Löschen läuft ...');
+      renderStatus(t('manage.delete_running', 'Deleting ...'));
       try {
         const response = await fetch('/api/delete.php', {
           method: 'POST',
@@ -356,7 +382,7 @@ if ($expiresAt === null && !$isMissing) {
         }
         window.location.reload();
       } catch (error) {
-        renderStatus(error.message);
+        renderStatus(error.message === 'Löschen fehlgeschlagen.' ? t('manage.delete_failed', 'Delete failed.') : error.message);
       }
     });
   });
