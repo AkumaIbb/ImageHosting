@@ -142,11 +142,21 @@ if ($added === 0) {
 }
 
 $upload['type'] = count($upload['files']) > 1 ? 'album' : 'single';
-ih_save_upload($upload);
-$publicUrl = '/v.php?id=' . $uploadId;
-$manageUrl = '/u.php?id=' . $uploadId;
 $expiresAt = ($upload['created_at'] ?? time()) + 172800;
-$shortCode = short_create($publicUrl, $expiresAt);
+$shortCode = null;
+if (!empty($upload['short_code']) && short_is_valid_code($upload['short_code'])) {
+    $existing = short_resolve($upload['short_code']);
+    if ($existing && ($existing['upload_id'] ?? '') === $uploadId && ($existing['expires_at'] ?? 0) >= time()) {
+        $shortCode = $upload['short_code'];
+    }
+}
+if (!$shortCode) {
+    $shortCode = short_create($uploadId, $expiresAt);
+    $upload['short_code'] = $shortCode;
+}
+ih_save_upload($upload);
+$publicUrl = '/v.php?id=' . $shortCode;
+$manageUrl = '/u.php?id=' . $uploadId;
 $shortUrl = base_url() . '/?id=' . $shortCode;
 
 log_msg('info', 'upload success', [

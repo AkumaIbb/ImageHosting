@@ -8,6 +8,8 @@ ih_maybe_cleanup();
 
 $uploadId = ih_sanitize_id($_GET['id'] ?? null);
 $upload = $uploadId ? ih_load_upload($uploadId) : null;
+$shortCode = is_array($upload) ? ($upload['short_code'] ?? null) : null;
+$publicUrl = $shortCode ? '/v.php?id=' . $shortCode : null;
 $isMissing = !$upload;
 ?>
 <!DOCTYPE html>
@@ -167,7 +169,11 @@ $isMissing = !$upload;
     <section class="card">
       <h2><?php echo $upload['type'] === 'album' ? 'Album-Upload' : 'Einzelbild-Upload'; ?></h2>
       <div class="actions">
-        <a class="button secondary" href="<?php echo '/v.php?id=' . $uploadId; ?>">Öffentliche Ansicht</a>
+        <?php if ($publicUrl): ?>
+          <a class="button secondary" href="<?php echo $publicUrl; ?>">Öffentliche Ansicht</a>
+        <?php else: ?>
+          <span class="button secondary" aria-disabled="true">Öffentliche Ansicht nicht verfügbar</span>
+        <?php endif; ?>
         <button class="button" id="addButton" type="button">Weitere Bilder hinzufügen</button>
       </div>
       <div class="dropzone" id="dropzone">

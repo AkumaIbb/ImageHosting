@@ -3,10 +3,20 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../lib/cleanup.php';
 require_once __DIR__ . '/../lib/uploads.php';
+require_once __DIR__ . '/../lib/shortcodes.php';
 
 ih_maybe_cleanup();
 
-$uploadId = ih_sanitize_id($_GET['id'] ?? null);
+$code = (string)($_GET['id'] ?? '');
+$uploadId = null;
+if (short_is_valid_code($code)) {
+  short_purge_expired();
+  $row = short_resolve($code);
+  if ($row && ($row['expires_at'] ?? 0) >= time()) {
+    $uploadId = ih_sanitize_id($row['upload_id'] ?? null);
+  }
+}
+
 $upload = $uploadId ? ih_load_upload($uploadId) : null;
 $isMissing = !$upload;
 ?>
