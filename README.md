@@ -1,5 +1,38 @@
 # ImageHosting
 
+## Erstinstallation
+
+1. **Beispiel-Konfigurationen kopieren** (im Verzeichnis `config/`):
+   - `config/secret.sample.php` nach `config/secret.php` kopieren.
+   - `config/admin_ids_example.txt` nach `config/admin_ids.txt` kopieren (oder die vorhandene Datei überschreiben).
+
+   Beispiel:
+
+   ```bash
+   cp config/secret.sample.php config/secret.php
+   cp config/admin_ids_example.txt config/admin_ids.txt
+   ```
+
+2. **Secrets setzen** in `config/secret.php`:
+   - `admin_hmac_secret`: Langer, zufälliger String (32+ Zeichen).
+   - `admin_login_token`: Token für das Admin-Login-Formular.
+
+3. **Admin-IDs pflegen** in `config/admin_ids.txt`:
+   - Eine Benutzer-ID (`ih_uid`) pro Zeile.
+   - Kommentare sind mit `#` möglich.
+
+> Hinweis: `config/admin_ids.txt` und `config/secret.php` sind sensibel und sollten nur vom Betreiber lesbar sein.
+
+## Admin-Panel
+
+1. **Login aufrufen:** Öffne `/admin_login.php`.
+2. **Admin-Token eingeben:** Verwende das `admin_login_token` aus `config/secret.php`.
+3. **Weiterleitung:** Nach erfolgreichem Login wirst du nach `/admin.php` (Admin-Panel) weitergeleitet.
+
+Das Admin-Panel ist nur zugänglich, wenn **beides** stimmt:
+1. Die anonyme User-ID (`ih_uid`) steht in `config/admin_ids.txt`.
+2. Das gültige `ih_admin`-Cookie wurde über `/admin_login.php` gesetzt.
+
 ## Security hardening notes
 
 ### Storage execution hardening
