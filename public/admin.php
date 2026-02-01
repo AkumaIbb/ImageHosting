@@ -151,6 +151,16 @@ if (!is_admin($cookieUserId)) {
   </section>
 
   <section class="card">
+    <h2><?php echo htmlspecialchars(ih_t('admin.default_ttl_title', $lang), ENT_QUOTES, 'UTF-8'); ?></h2>
+    <div class="row">
+      <label for="defaultTtlHours"><?php echo htmlspecialchars(ih_t('admin.default_ttl_label', $lang), ENT_QUOTES, 'UTF-8'); ?></label>
+      <input class="input" id="defaultTtlHours" type="number" min="0" step="1">
+      <button class="button secondary" id="saveDefaultTtl" type="button"><?php echo htmlspecialchars(ih_t('admin.default_ttl_save', $lang), ENT_QUOTES, 'UTF-8'); ?></button>
+    </div>
+    <div class="status" id="defaultTtlStatus"><?php echo htmlspecialchars(ih_t('admin.default_ttl_status_loading', $lang), ENT_QUOTES, 'UTF-8'); ?></div>
+  </section>
+
+  <section class="card">
     <h2><?php echo htmlspecialchars(ih_t('admin.uploads_title', $lang), ENT_QUOTES, 'UTF-8'); ?></h2>
     <div class="grid" id="uploadsGrid"></div>
     <div class="pagination">
@@ -181,6 +191,9 @@ if (!is_admin($cookieUserId)) {
   const prevPage = document.getElementById('prevPage');
   const nextPage = document.getElementById('nextPage');
   const pageInfo = document.getElementById('pageInfo');
+  const defaultTtlInput = document.getElementById('defaultTtlHours');
+  const saveDefaultTtl = document.getElementById('saveDefaultTtl');
+  const defaultTtlStatus = document.getElementById('defaultTtlStatus');
 
   const fallbackImage =
     'data:image/svg+xml;utf8,' +
@@ -199,6 +212,10 @@ if (!is_admin($cookieUserId)) {
 
   const setStatus = (message) => {
     adminStatus.textContent = message;
+  };
+
+  const setDefaultTtlStatus = (message) => {
+    defaultTtlStatus.textContent = message;
   };
 
   const updatePagination = () => {
@@ -301,6 +318,38 @@ if (!is_admin($cookieUserId)) {
     }
   };
 
+  const loadDefaultTtl = async () => {
+    try {
+      setDefaultTtlStatus(t('admin.default_ttl_status_loading', 'Loading default TTL...'));
+      const data = await requestJson('/api/admin_settings.php');
+      defaultTtlInput.value = data.default_ttl_hours ?? 0;
+      setDefaultTtlStatus(t('admin.default_ttl_status_ready', 'Default TTL loaded.'));
+    } catch (error) {
+      setDefaultTtlStatus(t('admin.default_ttl_status_failed', 'Default TTL could not be loaded.'));
+    }
+  };
+
+  saveDefaultTtl.addEventListener('click', async () => {
+    const hours = Number.parseInt(defaultTtlInput.value, 10);
+    if (Number.isNaN(hours) || hours < 0) {
+      setDefaultTtlStatus(t('admin.default_ttl_invalid', 'Please enter a valid number.'));
+      return;
+    }
+    saveDefaultTtl.disabled = true;
+    try {
+      await requestJson('/api/admin_settings.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ default_ttl_hours: hours }),
+      });
+      setDefaultTtlStatus(t('admin.default_ttl_saved', 'Default TTL saved.'));
+    } catch (error) {
+      setDefaultTtlStatus(t('admin.default_ttl_save_failed', 'Default TTL could not be saved.'));
+    } finally {
+      saveDefaultTtl.disabled = false;
+    }
+  });
+
   document.getElementById('applyFilter').addEventListener('click', () => {
     state.filterUserId = filterInput.value.trim();
     state.page = 1;
@@ -326,6 +375,7 @@ if (!is_admin($cookieUserId)) {
     loadUploads();
   });
 
+  loadDefaultTtl();
   loadUploads();
 </script>
 </body>

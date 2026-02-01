@@ -25,9 +25,6 @@ $userId = null;
 if ($user) {
     $userId = $cookieUserId;
     $ttlSeconds = ih_effective_ttl_seconds($user['ttl_seconds'] !== null ? (int)$user['ttl_seconds'] : null, $isAdmin);
-    if ($ttlSeconds === null && !$isAdmin) {
-        $ttlSeconds = IH_DEFAULT_TTL_SECONDS;
-    }
     $isBanned = (int)($user['is_banned'] ?? 0) === 1;
 }
 

@@ -1,12 +1,10 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/constants.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/logger.php';
-
-const IH_DEFAULT_TTL_SECONDS = 172800;
-const IH_UNLIMITED_TTL = null;
-const IH_SHORTCODE_MAX_EXPIRES = 253402300799;
+require_once __DIR__ . '/settings.php';
 
 function ih_get_user_id_cookie(): ?string
 {
@@ -38,13 +36,14 @@ function ih_create_user(): string
 {
     $pdo = ih_db();
     $stmt = $pdo->prepare('INSERT INTO users (user_id, created_at, ttl_seconds, is_banned) VALUES (:user_id, :created_at, :ttl_seconds, 0)');
+    $defaultTtl = ih_get_default_ttl_seconds();
     for ($attempt = 0; $attempt < 10; $attempt++) {
         $userId = ih_generate_user_id();
         try {
             $stmt->execute([
                 ':user_id' => $userId,
                 ':created_at' => time(),
-                ':ttl_seconds' => IH_DEFAULT_TTL_SECONDS,
+                ':ttl_seconds' => $defaultTtl,
             ]);
             return $userId;
         } catch (PDOException $exception) {
@@ -93,6 +92,8 @@ function ih_allowed_ttl_options(bool $isAdmin): array
             '180d' => 15552000,
             'unlimited' => IH_UNLIMITED_TTL,
         ];
+    } elseif (ih_get_default_ttl_seconds() === null) {
+        $options['unlimited'] = IH_UNLIMITED_TTL;
     }
 
     return $options;
@@ -136,14 +137,14 @@ function ih_effective_ttl_seconds(?int $storedTtl, bool $isAdmin): ?int
 {
     $options = ih_allowed_ttl_options($isAdmin);
     if ($storedTtl === null) {
-        return $isAdmin ? null : IH_DEFAULT_TTL_SECONDS;
+        return ih_get_default_ttl_seconds();
     }
 
     if (in_array($storedTtl, array_filter($options, static fn($value): bool => $value !== null), true)) {
         return $storedTtl;
     }
 
-    return IH_DEFAULT_TTL_SECONDS;
+    return ih_get_default_ttl_seconds();
 }
 
 function ih_ttl_options_payload(bool $isAdmin): array

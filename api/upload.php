@@ -178,7 +178,8 @@ if ($uploadId) {
 } else {
     $uploadId = ih_generate_id();
     $now = time();
-    $expiresAt = $now + 172800;
+    $defaultTtl = ih_get_default_ttl_seconds();
+    $expiresAt = $defaultTtl === null ? null : $now + $defaultTtl;
     if ($user) {
         $ttlSeconds = ih_effective_ttl_seconds($user['ttl_seconds'] !== null ? (int)$user['ttl_seconds'] : null, $isAdmin);
         if ($ttlSeconds === null) {
