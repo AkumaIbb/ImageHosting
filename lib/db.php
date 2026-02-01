@@ -47,6 +47,11 @@ function ih_db(): PDO
         created_at INTEGER NOT NULL
     )');
 
+    $pdo->exec('CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NULL
+    )');
+
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_uploads_user ON uploads(user_id)');
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_uploads_expires ON uploads(expires_at)');
 
