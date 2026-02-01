@@ -1,1 +1,4 @@
 config/secret.php
+config/admin_ids.txt
+storage/
+/data/uploads/
